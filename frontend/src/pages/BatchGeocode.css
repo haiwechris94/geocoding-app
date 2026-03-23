@@ -1,0 +1,134 @@
+.batch-geocode-page {
+  padding: 24px 0;
+}
+
+.page-header {
+  margin-bottom: 32px;
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  background: var(--surface);
+  padding: 8px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+}
+
+.tab {
+  flex: 1;
+  padding: 14px 24px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius);
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.tab:hover {
+  background: var(--background);
+  color: var(--text-primary);
+}
+
+.tab.active {
+  background: var(--primary-color);
+  color: white;
+}
+
+/* Content */
+.batch-content {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.input-section {
+  min-height: 300px;
+}
+
+/* Column Selection */
+.column-selection {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border-color);
+}
+
+/* File Preview */
+.file-preview {
+  margin-top: 20px;
+}
+
+.file-preview h4 {
+  font-size: 1rem;
+  margin-bottom: 12px;
+  color: var(--text-primary);
+}
+
+.preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  overflow-x: auto;
+  display: block;
+}
+
+.preview-table th,
+.preview-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border: 1px solid var(--border-color);
+  white-space: nowrap;
+}
+
+.preview-table th {
+  background: var(--background);
+  font-weight: 600;
+}
+
+.preview-table th.selected,
+.preview-table td.selected {
+  background: var(--primary-light);
+  border-color: var(--primary-color);
+}
+
+.preview-info {
+  margin-top: 12px;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+/* Actions */
+.batch-actions {
+  display: flex;
+  justify-content: center;
+  padding: 24px 0;
+}
+
+.btn-large {
+  padding: 16px 48px;
+  font-size: 1.1rem;
+}
+
+@media (max-width: 768px) {
+  .tabs {
+    flex-direction: column;
+  }
+
+  .tab {
+    text-align: center;
+  }
+
+  .preview-table {
+    font-size: 0.75rem;
+  }
+
+  .preview-table th,
+  .preview-table td {
+    padding: 8px;
+  }
+}

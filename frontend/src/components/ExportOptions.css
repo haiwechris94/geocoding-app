@@ -1,0 +1,88 @@
+.export-options {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  box-shadow: var(--shadow);
+}
+
+.export-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: var(--text-primary);
+}
+
+.export-buttons {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.export-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 24px;
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius);
+  background: white;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.export-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+
+.export-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.export-btn.excel {
+  border-color: #217346;
+  color: #217346;
+}
+
+.export-btn.excel:hover:not(:disabled) {
+  background: #217346;
+  color: white;
+}
+
+.export-btn.csv {
+  border-color: #0066CC;
+  color: #0066CC;
+}
+
+.export-btn.csv:hover:not(:disabled) {
+  background: #0066CC;
+  color: white;
+}
+
+.export-btn.pdf {
+  border-color: #D32F2F;
+  color: #D32F2F;
+}
+
+.export-btn.pdf:hover:not(:disabled) {
+  background: #D32F2F;
+  color: white;
+}
+
+.export-icon {
+  font-size: 1.25rem;
+}
+
+@media (max-width: 480px) {
+  .export-buttons {
+    flex-direction: column;
+  }
+
+  .export-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}

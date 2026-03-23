@@ -1,0 +1,400 @@
+/* ============================================
+   VillagePoint — GeoAgent Page
+   ============================================ */
+
+.geoagent-page {
+  padding: 48px 20px 80px;
+  min-height: calc(100vh - 60px);
+  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+}
+
+.geoagent-container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+/* ── Header ── */
+.geoagent-header {
+  text-align: center;
+  margin-bottom: 48px;
+}
+
+.geoagent-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.03em;
+  margin-bottom: 12px;
+}
+
+.geoagent-subtitle {
+  font-size: 1.125rem;
+  color: var(--text-secondary);
+}
+
+/* ── Search Form ── */
+.geoagent-form {
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 32px;
+  margin-bottom: 32px;
+  box-shadow: var(--shadow);
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group:last-of-type {
+  margin-bottom: 24px;
+}
+
+.form-label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.form-input {
+  width: 100%;
+  height: 48px;
+  padding: 0 16px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  font-size: 1rem;
+  color: var(--text-primary);
+  background: var(--surface);
+  transition: var(--transition);
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px var(--primary-light);
+}
+
+.form-input::placeholder {
+  color: var(--text-muted);
+}
+
+.geoagent-search-btn {
+  width: 100%;
+  height: 52px;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.geoagent-search-btn:hover {
+  background: var(--primary-dark);
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.4);
+}
+
+.geoagent-search-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* ── Section Title ── */
+.section-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+}
+
+/* ── Result Section ── */
+.geoagent-result-section {
+  margin-bottom: 32px;
+}
+
+.result-loading {
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 24px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.result-card {
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 28px;
+  box-shadow: var(--shadow);
+}
+
+.result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-color);
+  gap: 16px;
+}
+
+.result-name {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.reliability-badge {
+  display: inline-block;
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.reliability-high {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.reliability-medium {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.reliability-low {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.result-details {
+  margin-bottom: 24px;
+}
+
+.detail-row {
+  display: flex;
+  align-items: baseline;
+  margin-bottom: 12px;
+  gap: 12px;
+}
+
+.detail-row:last-child {
+  margin-bottom: 0;
+}
+
+.detail-label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  min-width: 100px;
+}
+
+.detail-value {
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.detail-value.coords {
+  font-family: monospace;
+  background: var(--surface-2);
+  padding: 6px 12px;
+  border-radius: var(--radius);
+}
+
+.result-not-found {
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 24px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+/* ── Alternatives Table ── */
+.alternatives-section {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border-color);
+}
+
+.alternatives-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+}
+
+.alternatives-table-wrapper {
+  overflow-x: auto;
+}
+
+.alternatives-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.alternatives-table th,
+.alternatives-table td {
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.alternatives-table th {
+  background: var(--surface-2);
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.alternatives-table tr:nth-child(even) {
+  background: var(--surface-2);
+}
+
+.alternatives-table tr:hover {
+  background: var(--primary-light);
+}
+
+.alternatives-table td {
+  color: var(--text-secondary);
+}
+
+/* ── Suggestions Section ── */
+.suggestions-section {
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  box-shadow: var(--shadow-xs);
+}
+
+.suggestions-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  gap: 16px;
+}
+
+.suggestions-header .section-title {
+  margin-bottom: 0;
+}
+
+.suggestions-btn {
+  padding: 8px 20px;
+  background: var(--surface-2);
+  color: var(--primary-color);
+  border: 1px solid var(--primary-mid);
+  border-radius: var(--radius-full);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.suggestions-btn:hover:not(:disabled) {
+  background: var(--primary-light);
+  border-color: var(--primary-color);
+}
+
+.suggestions-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.suggestions-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.suggestion-chip {
+  padding: 8px 18px;
+  background: var(--primary-light);
+  color: var(--primary-color);
+  border: 1px solid var(--primary-mid);
+  border-radius: var(--radius-full);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.suggestion-chip:hover {
+  background: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+}
+
+.suggestions-loading {
+  color: var(--text-secondary);
+  font-style: italic;
+  text-align: center;
+  padding: 12px;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .geoagent-page {
+    padding: 32px 16px 60px;
+  }
+
+  .geoagent-title {
+    font-size: 2rem;
+  }
+
+  .geoagent-form {
+    padding: 24px;
+  }
+
+  .result-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .detail-row {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .detail-label {
+    min-width: auto;
+  }
+
+  .suggestions-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .suggestions-btn {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .geoagent-title {
+    font-size: 1.75rem;
+  }
+
+  .result-name {
+    font-size: 1.25rem;
+  }
+
+  .alternatives-table th,
+  .alternatives-table td {
+    padding: 10px 12px;
+    font-size: 0.8rem;
+  }
+}

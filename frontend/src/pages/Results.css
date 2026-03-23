@@ -1,0 +1,32 @@
+.results-page {
+  padding: 24px 0;
+}
+
+.results-section {
+  margin-top: 24px;
+}
+
+.results-actions {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border-color);
+}
+
+/* Override stats grid for results page */
+.results-page .stats-grid {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+@media (max-width: 900px) {
+  .results-page .stats-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .results-page .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

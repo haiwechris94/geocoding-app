@@ -1,0 +1,360 @@
+/* ============================================
+   VillagePoint — Navbar
+   ============================================ */
+
+.header {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-color);
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  transition: box-shadow 0.2s ease;
+}
+
+.header-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  height: 100px;
+  gap: 16px;
+}
+
+/* ---- Logo / Wordmark ---- */
+.logo {
+  text-decoration: none;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.logo-img {
+  height: 90px;
+  width: auto;
+  object-fit: contain;
+}
+
+.logo-wordmark {
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.logo-village {
+  color: #0F172A;
+}
+
+.logo-point {
+  color: #EF4444;
+}
+
+.logo-wordmark {
+  font-size: 1.2rem;
+  font-weight: 400;
+  color: var(--text-primary);
+  letter-spacing: -0.03em;
+}
+
+.logo-wordmark strong {
+  font-weight: 700;
+  color: var(--primary-color);
+}
+
+/* ---- GeoAgent Search Bar ---- */
+.geo-search-bar {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.geo-search-form {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.geo-search-input {
+  width: 220px;
+  padding: 6px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  font-size: 0.85rem;
+  background: var(--surface);
+  color: var(--text-primary);
+  transition: var(--transition);
+}
+
+.geo-search-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px var(--primary-light);
+}
+
+.geo-search-input::placeholder {
+  color: var(--text-muted);
+}
+
+.geo-search-btn {
+  padding: 6px 14px;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.geo-search-btn:hover {
+  background: var(--primary-dark);
+}
+
+.geo-search-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.geo-search-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 280px;
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  z-index: 200;
+  overflow: hidden;
+}
+
+.geo-dropdown-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  background: var(--surface-2);
+  border: none;
+  border-radius: 50%;
+  font-size: 1rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+}
+
+.geo-dropdown-close:hover {
+  background: var(--border-color);
+  color: var(--text-primary);
+}
+
+.geo-result-item {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.geo-result-item:last-child {
+  border-bottom: none;
+}
+
+.geo-result-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.geo-result-coords {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-family: monospace;
+  margin-bottom: 8px;
+}
+
+.geo-loading,
+.geo-no-result {
+  color: var(--text-secondary);
+  font-style: italic;
+  text-align: center;
+}
+
+.reliability-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.reliability-high {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.reliability-medium {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.reliability-low {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* ---- Nav ---- */
+.nav {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
+.nav-list {
+  display: flex;
+  list-style: none;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+}
+
+.nav-item {
+  position: relative;
+}
+
+.nav-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 12px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: 500;
+  border-radius: var(--radius-full);
+  transition: var(--transition);
+  white-space: nowrap;
+  letter-spacing: -0.01em;
+}
+
+.nav-link:hover {
+  color: var(--text-primary);
+  background: var(--surface-2);
+}
+
+.nav-link.active {
+  color: var(--primary-color);
+  background: var(--primary-light);
+  font-weight: 600;
+}
+
+/* ---- Right side ---- */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+/* ---- Menu backdrop ---- */
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+}
+
+/* ---- Mobile hamburger ---- */
+.mobile-menu-btn {
+  display: none;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 22px;
+  height: 16px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.mobile-menu-btn span {
+  display: block;
+  width: 100%;
+  height: 2px;
+  background: var(--text-secondary);
+  border-radius: 2px;
+  transition: var(--transition);
+}
+
+.mobile-menu-btn.open span:nth-child(1) {
+  transform: rotate(45deg) translate(5px, 5px);
+}
+
+.mobile-menu-btn.open span:nth-child(2) {
+  opacity: 0;
+}
+
+.mobile-menu-btn.open span:nth-child(3) {
+  transform: rotate(-45deg) translate(5px, -5px);
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 1100px) {
+  .geo-search-input {
+    width: 180px;
+  }
+  
+  .nav-link {
+    padding: 8px 10px;
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 900px) {
+  .geo-search-bar {
+    display: none;
+  }
+  
+  .nav {
+    position: fixed;
+    top: 100px;
+    left: 0;
+    right: 0;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border-color);
+    padding: 12px 16px 16px;
+    box-shadow: var(--shadow-lg);
+    display: none;
+    z-index: 1000;
+  }
+
+  .nav.mobile-open {
+    display: block;
+    animation: fadeIn 0.2s ease;
+  }
+
+  .nav-list {
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .nav-link {
+    padding: 11px 16px;
+    width: 100%;
+    border-radius: var(--radius);
+    font-size: 0.9rem;
+  }
+
+  .mobile-menu-btn {
+    display: flex;
+  }
+}
+
+@media (max-width: 480px) {
+  .header-container {
+    padding: 0 16px;
+  }
+}

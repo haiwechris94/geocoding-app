@@ -1,0 +1,488 @@
+[
+  {
+    "id": "3637e2dc-e872-4a8d-98b5-4a1799fa015e",
+    "timestamp": "2026-03-22T21:14:55.698Z",
+    "query": "Multi-source search: Biden",
+    "type": "area",
+    "filters": {
+      "center": {
+        "lat": 7.316937899787268,
+        "lng": 13.569488525390627
+      },
+      "radius": 20,
+      "villageName": "Biden"
+    },
+    "result": {
+      "found": false,
+      "confidence": 0,
+      "latitude": null,
+      "longitude": null,
+      "source": null,
+      "formattedAddress": null
+    },
+    "metadata": {
+      "responseTime": null,
+      "alternativesCount": 0,
+      "userAgent": null
+    }
+  },
+  {
+    "id": "5125a0f9-2d8d-4867-98ac-b76909e531b5",
+    "timestamp": "2026-03-22T12:38:36.447Z",
+    "query": "Multi-source search: Riao",
+    "type": "area",
+    "filters": {
+      "center": {
+        "lat": 6.132362249080842,
+        "lng": 13.974609375000002
+      },
+      "radius": 20,
+      "villageName": "Riao"
+    },
+    "result": {
+      "found": false,
+      "confidence": 0,
+      "latitude": null,
+      "longitude": null,
+      "source": null,
+      "formattedAddress": null
+    },
+    "metadata": {
+      "responseTime": null,
+      "alternativesCount": 0,
+      "userAgent": null
+    }
+  },
+  {
+    "id": "4f2da001-f36e-46a5-9126-c316b5d06576",
+    "timestamp": "2026-03-21T08:25:24.034Z",
+    "query": "Area search: 9.309701530399407, 13.385009709745647",
+    "type": "area",
+    "filters": {
+      "center": {
+        "lat": 9.309701530399407,
+        "lng": 13.385009709745647
+      },
+      "radius": 20,
+      "countryCode": null
+    },
+    "result": {
+      "found": true,
+      "confidence": 0.8,
+      "latitude": null,
+      "longitude": null,
+      "source": null,
+      "formattedAddress": null
+    },
+    "metadata": {
+      "responseTime": null,
+      "alternativesCount": 0,
+      "userAgent": null
+    }
+  },
+  {
+    "id": "d82d1b45-e11c-4f3b-ac89-9ac2f4eb2117",
+    "timestamp": "2026-03-20T11:49:13.064Z",
+    "query": "Area search: -0.6880022644165669, 12.744140625000002",
+    "type": "area",
+    "filters": {
+      "center": {
+        "lat": -0.6880022644165669,
+        "lng": 12.744140625000002
+      },
+      "radius": 20,
+      "countryCode": null
+    },
+    "result": {
+      "found": true,
+      "confidence": 0.8,
+      "latitude": null,
+      "longitude": null,
+      "source": null,
+      "formattedAddress": null
+    },
+    "metadata": {
+      "responseTime": null,
+      "alternativesCount": 0,
+      "userAgent": null
+    }
+  },
+  {
+    "id": "ca28857b-6e83-479a-b108-73ecd9c4fc78",
+    "timestamp": "2026-01-21T09:51:10.312Z",
+    "query": "Area search: 7.32774243521151, 13.584594810381535",
+    "type": "area",
+    "filters": {
+      "center": {
+        "lat": 7.32774243521151,
+        "lng": 13.584594810381535
+      },
+      "radius": 30,
+      "countryCode": null
+    },
+    "result": {
+      "found": true,
+      "confidence": 0.8,
+      "latitude": null,
+      "longitude": null,
+      "source": null,
+      "formattedAddress": null
+    },
+    "metadata": {
+      "responseTime": null,
+      "alternativesCount": 0,
+      "userAgent": null
+    }
+  },
+  {
+    "id": "db33c144-761d-419d-aade-2a3c69f03d5a",
+    "timestamp": "2026-01-17T17:59:06.242Z",
+    "query": "Area search: 6.391844270553717, 12.678222656250002",
+    "type": "area",
+    "filters": {
+      "center": {
+        "lat": 6.391844270553717,
+        "lng": 12.678222656250002
+      },
+      "radius": 20,
+      "countryCode": null
+    },
+    "result": {
+      "found": true,
+      "confidence": 0.8,
+      "latitude": null,
+      "longitude": null,
+      "source": null,
+      "formattedAddress": null
+    },
+    "metadata": {
+      "responseTime": null,
+      "alternativesCount": 0,
+      "userAgent": null
+    }
+  },
+  {
+    "id": "6ee8f070-b5bc-441e-86f7-8bff7b3a07c8",
+    "timestamp": "2026-01-17T17:48:00.763Z",
+    "query": "Area search: 7.31026928588609, 13.566283956170084",
+    "type": "area",
+    "filters": {
+      "center": {
+        "lat": 7.31026928588609,
+        "lng": 13.566283956170084
+      },
+      "radius": 20,
+      "countryCode": null
+    },
+    "result": {
+      "found": true,
+      "confidence": 0.8,
+      "latitude": null,
+      "longitude": null,
+      "source": null,
+      "formattedAddress": null
+    },
+    "metadata": {
+      "responseTime": null,
+      "alternativesCount": 0,
+      "userAgent": null
+    }
+  },
+  {
+    "id": "b09520cc-196d-4836-b399-fb0e34b3a567",
+    "timestamp": "2026-01-17T11:39:49.295Z",
+    "query": "Area search: 7.316391568077098, 13.575439509004358",
+    "type": "area",
+    "filters": {
+      "center": {
+        "lat": 7.316391568077098,
+        "lng": 13.575439509004358
+      },
+      "radius": 20,
+      "countryCode": null
+    },
+    "result": {
+      "found": true,
+      "confidence": 0.8,
+      "latitude": null,
+      "longitude": null,
+      "source": null,
+      "formattedAddress": null
+    },
+    "metadata": {
+      "responseTime": null,
+      "alternativesCount": 0,
+      "userAgent": null
+    }
+  },
+  {
+    "id": "714557b7-0763-4aba-8c27-5b88fd5a89f7",
+    "timestamp": "2026-01-17T11:38:48.720Z",
+    "query": "Area search: 7.316391568077098, 13.575439509004358",
+    "type": "area",
+    "filters": {
+      "center": {
+        "lat": 7.316391568077098,
+        "lng": 13.575439509004358
+      },
+      "radius": 20,
+      "countryCode": null
+    },
+    "result": {
+      "found": true,
+      "confidence": 0.8,
+      "latitude": null,
+      "longitude": null,
+      "source": null,
+      "formattedAddress": null
+    },
+    "metadata": {
+      "responseTime": null,
+      "alternativesCount": 0,
+      "userAgent": null
+    }
+  },
+  {
+    "id": "f9cec209-d66e-4108-93d1-1b64498e4647",
+    "timestamp": "2026-01-17T11:38:12.606Z",
+    "query": "Area search: 7.754991145289675, 13.798828125000002",
+    "type": "area",
+    "filters": {
+      "center": {
+        "lat": 7.754991145289675,
+        "lng": 13.798828125000002
+      },
+      "radius": 20,
+      "countryCode": null
+    },
+    "result": {
+      "found": true,
+      "confidence": 0.8,
+      "latitude": null,
+      "longitude": null,
+      "source": null,
+      "formattedAddress": null
+    },
+    "metadata": {
+      "responseTime": null,
+      "alternativesCount": 0,
+      "userAgent": null
+    }
+  },
+  {
+    "id": "5b2d9848-a980-44ae-8f46-479dd900b727",
+    "timestamp": "2026-01-16T11:33:31.557Z",
+    "query": "Area search: 7.322294070428131, 13.574981689453127",
+    "type": "area",
+    "filters": {
+      "center": {
+        "lat": 7.322294070428131,
+        "lng": 13.574981689453127
+      },
+      "radius": 20,
+      "countryCode": null
+    },
+    "result": {
+      "found": true,
+      "confidence": 0.8,
+      "latitude": null,
+      "longitude": null,
+      "source": null,
+      "formattedAddress": null
+    },
+    "metadata": {
+      "responseTime": null,
+      "alternativesCount": 0,
+      "userAgent": null
+    }
+  },
+  {
+    "id": "672f9195-66e9-4e1b-b484-7c9e32d3a5e3",
+    "timestamp": "2026-01-16T11:24:14.386Z",
+    "query": "Area search: 7.296207857136605, 13.595581389963629",
+    "type": "area",
+    "filters": {
+      "center": {
+        "lat": 7.296207857136605,
+        "lng": 13.595581389963629
+      },
+      "radius": 20,
+      "countryCode": null
+    },
+    "result": {
+      "found": true,
+      "confidence": 0.8,
+      "latitude": null,
+      "longitude": null,
+      "source": null,
+      "formattedAddress": null
+    },
+    "metadata": {
+      "responseTime": null,
+      "alternativesCount": 0,
+      "userAgent": null
+    }
+  },
+  {
+    "id": "b5f62679-03ec-4931-9551-52ce370c0013",
+    "timestamp": "2026-01-16T06:05:27.923Z",
+    "query": "Area search: 6.388539828465129, 13.154298663139345",
+    "type": "area",
+    "filters": {
+      "center": {
+        "lat": 6.388539828465129,
+        "lng": 13.154298663139345
+      },
+      "radius": 20,
+      "countryCode": null
+    },
+    "result": {
+      "found": true,
+      "confidence": 0.8,
+      "latitude": null,
+      "longitude": null,
+      "source": null,
+      "formattedAddress": null
+    },
+    "metadata": {
+      "responseTime": null,
+      "alternativesCount": 0,
+      "userAgent": null
+    }
+  },
+  {
+    "id": "d7222f9c-ab96-4872-82dd-26272919caa8",
+    "timestamp": "2026-01-15T20:07:05.450Z",
+    "query": "Area search: 8.248187335350792, 13.798828125000002",
+    "type": "area",
+    "filters": {
+      "center": {
+        "lat": 8.248187335350792,
+        "lng": 13.798828125000002
+      },
+      "radius": 20,
+      "countryCode": null
+    },
+    "result": {
+      "found": true,
+      "confidence": 0.8,
+      "latitude": null,
+      "longitude": null,
+      "source": null,
+      "formattedAddress": null
+    },
+    "metadata": {
+      "responseTime": null,
+      "alternativesCount": 0,
+      "userAgent": null
+    }
+  },
+  {
+    "id": "79e80599-e365-466d-bd79-9d53f948cd9a",
+    "timestamp": "2026-01-15T20:05:18.768Z",
+    "query": "Area search: 8.248187335350792, 13.798828125000002",
+    "type": "area",
+    "filters": {
+      "center": {
+        "lat": 8.248187335350792,
+        "lng": 13.798828125000002
+      },
+      "radius": 20,
+      "countryCode": null
+    },
+    "result": {
+      "found": false,
+      "confidence": 0,
+      "latitude": null,
+      "longitude": null,
+      "source": null,
+      "formattedAddress": null
+    },
+    "metadata": {
+      "responseTime": null,
+      "alternativesCount": 0,
+      "userAgent": null
+    }
+  },
+  {
+    "id": "618c674f-83c3-47c3-a88d-4fa13df78aef",
+    "timestamp": "2026-01-15T12:07:16.933Z",
+    "query": "Area search: 7.326429864776181, 13.591003362089397",
+    "type": "area",
+    "filters": {
+      "center": {
+        "lat": 7.326429864776181,
+        "lng": 13.591003362089397
+      },
+      "radius": 30,
+      "countryCode": null
+    },
+    "result": {
+      "found": true,
+      "confidence": 0.8,
+      "latitude": null,
+      "longitude": null,
+      "source": null,
+      "formattedAddress": null
+    },
+    "metadata": {
+      "responseTime": null,
+      "alternativesCount": 0,
+      "userAgent": null
+    }
+  },
+  {
+    "id": "b1d6fffd-8cf5-46b5-8857-b6a4479f3e5e",
+    "timestamp": "2026-01-15T10:56:21.702Z",
+    "query": "Area search: 9.045422831769589, 13.677978515625002",
+    "type": "area",
+    "filters": {
+      "center": {
+        "lat": 9.045422831769589,
+        "lng": 13.677978515625002
+      },
+      "radius": 20,
+      "countryCode": null
+    },
+    "result": {
+      "found": true,
+      "confidence": 0.8,
+      "latitude": null,
+      "longitude": null,
+      "source": null,
+      "formattedAddress": null
+    },
+    "metadata": {
+      "responseTime": null,
+      "alternativesCount": 0,
+      "userAgent": null
+    }
+  },
+  {
+    "id": "d6697114-77b4-4861-b308-5c1802b16505",
+    "timestamp": "2026-01-15T10:53:21.152Z",
+    "query": "Area search: 9.05731862011729, 13.664588928222658",
+    "type": "area",
+    "filters": {
+      "center": {
+        "lat": 9.05731862011729,
+        "lng": 13.664588928222658
+      },
+      "radius": 20,
+      "countryCode": null
+    },
+    "result": {
+      "found": true,
+      "confidence": 0.8,
+      "latitude": null,
+      "longitude": null,
+      "source": null,
+      "formattedAddress": null
+    },
+    "metadata": {
+      "responseTime": null,
+      "alternativesCount": 0,
+      "userAgent": null
+    }
+  }
+]

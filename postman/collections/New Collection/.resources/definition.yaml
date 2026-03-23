@@ -1,0 +1,3 @@
+$kind: collection
+description: Collection for geocoding API requests including GeoNames API for
+  searching African villages.

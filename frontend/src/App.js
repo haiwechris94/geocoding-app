@@ -11,6 +11,7 @@ import ApiDocs from './pages/ApiDocs';
 import UserGuide from './pages/UserGuide';
 import AdminDashboard from './pages/AdminDashboard';
 import Dashboard from './components/Dashboard';
+import About from './pages/About';
 import { WelcomeModal } from './components/TutorialOverlay';
 import './App.css';
 
@@ -52,6 +53,7 @@ function App() {
           <Route path="/api-docs" element={<ApiDocs />} />
           <Route path="/user-guide" element={<UserGuide />} />
           <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/about" element={<About />} />
         </Routes>
       </main>
       <footer className="footer">

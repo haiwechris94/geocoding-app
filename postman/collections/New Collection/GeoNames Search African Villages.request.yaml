@@ -1,0 +1,116 @@
+$kind: http-request
+description: >-
+  # GeoNames Search API - African Villages
+
+
+  This request searches for villages and locations in Africa using the GeoNames
+  geographical database.
+
+
+  ## Endpoint
+
+  `GET https://secure.geonames.org/searchJSON`
+
+
+  ## Parameters
+
+
+  | Parameter | Value | Description |
+
+  |-----------|-------|-------------|
+
+  | `q` | `{{village}}` | The search query (village name). Uses environment
+  variable for easy testing. |
+
+  | `continentCode` | `AF` | Restricts search to Africa continent only. |
+
+  | `maxRows` | `20` | Maximum number of results to return (1-1000). |
+
+  | `username` | `Chris05` | GeoNames API authentication username. |
+
+
+  ## Response Fields
+
+
+  The API returns JSON with the following key fields for each result:
+
+
+  - **name**: The place name
+
+  - **lat**: Latitude coordinate
+
+  - **lng**: Longitude coordinate  
+
+  - **countryName**: Full country name
+
+  - **adminName1**: First-level administrative division (region/state)
+
+  - **geonameId**: Unique GeoNames identifier
+
+  - **fcl**: Feature class (P=populated place, A=administrative, etc.)
+
+  - **fcode**: Feature code (PPL=populated place, PPLA=admin seat, etc.)
+
+
+  ## Usage
+
+
+  1. Set the `village` environment variable to the village name you want to
+  search
+
+  2. Send the request
+
+  3. Parse the `geonames` array in the response for results
+
+
+  ## Example Response
+
+
+  ```json
+
+  {
+    "totalResultsCount": 5,
+    "geonames": [
+      {
+        "name": "Bamako",
+        "lat": "12.65",
+        "lng": "-8.0",
+        "countryName": "Mali",
+        "adminName1": "Bamako",
+        "geonameId": 2460596,
+        "fcl": "P",
+        "fcode": "PPLC"
+      }
+    ]
+  }
+
+  ```
+
+
+  ## Rate Limits
+
+
+  - Free accounts: 1000 requests/hour, 30000 requests/day
+
+  - Consider adding delays between batch requests
+url: https://secure.geonames.org/searchJSON?q={{village}}&continentCode=AF&maxRows=20&username=Chris05
+method: GET
+queryParams:
+  - key: q
+    value: "{{village}}"
+    description: Search query - the name of the village to search for. Uses the
+      'village' environment variable for testing different village names.
+  - key: continentCode
+    value: AF
+    description: "Continent code filter. 'AF' restricts results to Africa only.
+      Other valid codes: EU (Europe), AS (Asia), NA (North America), SA (South
+      America), OC (Oceania), AN (Antarctica)."
+  - key: maxRows
+    value: "20"
+    description: Maximum number of results to return. Default is 10, maximum is
+      1000. Set to 20 for a good balance between completeness and performance.
+  - key: username
+    value: Chris05
+    description: GeoNames API username. Required for authentication. Register at
+      geonames.org to get your own username.
+order: 1000

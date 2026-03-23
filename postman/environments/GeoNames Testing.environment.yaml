@@ -1,0 +1,6 @@
+name: GeoNames Testing
+values:
+  - key: village
+    value: Bamako
+    enabled: true
+    description: The name of the village to search for in the GeoNames API. Change this value to test different village searches in Africa.

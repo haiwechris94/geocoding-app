@@ -10,11 +10,11 @@ const Header = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const mainNavItems = [
-    { path: '/',          label: language === 'en' ? 'Home'            : 'Accueil' },
-    { path: '/dashboard', label: language === 'en' ? 'Dashboard'       : 'Tableau de Bord' },
-    { path: '/search',    label: language === 'en' ? 'Advanced Search'  : 'Recherche Avancée' },
-    { path: '/batch',     label: language === 'en' ? 'Batch Geocode'    : 'Géocodage par Lots' },
-    { path: '/history',   label: language === 'en' ? 'History'          : 'Historique' },
+    { path: '/',        label: language === 'en' ? 'Home'            : 'Accueil' },
+    { path: '/search',  label: language === 'en' ? 'Advanced Search' : 'Recherche Avancée' },
+    { path: '/batch',   label: language === 'en' ? 'Batch Geocode'   : 'Géocodage par Lots' },
+    { path: '/history', label: language === 'en' ? 'History'         : 'Historique' },
+    { path: '/about',   label: language === 'en' ? 'About'           : 'À propos de' },
   ];
 
   return (

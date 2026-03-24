@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
-import { geocodingAPI, aiAPI } from '../services/api';
+import { geocodingAPI, aiAPI, searchAreaAPI } from '../services/api';
 import { toast } from 'react-toastify';
 import MapSearch from '../components/MapSearch';
 import FilterOptions from '../components/FilterOptions';
@@ -130,17 +130,11 @@ const AdvancedSearch = () => {
     setAreaSearchResults(null);
 
     try {
-      const response = await fetch('/api/geocoding/search-area', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          villageName: villageName.trim(),
-          center: { lat: center.lat, lng: center.lng },
-          radius: parseFloat(radius),
-          filters
-        })
-      });
-      const result = await response.json();
+      const result = await searchAreaAPI.searchArea(
+        { lat: center.lat, lng: center.lng },
+        parseFloat(radius),
+        filters?.countryCode || null
+      );
       
       if (result.success) {
         // Store results in sessionStorage and navigate to results page

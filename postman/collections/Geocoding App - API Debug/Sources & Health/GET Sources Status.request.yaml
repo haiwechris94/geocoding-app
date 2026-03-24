@@ -1,0 +1,15 @@
+$kind: http-request
+name: GET Sources Status
+method: GET
+url: '{{baseUrl}}/api/sources/status'
+order: 1000
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status 200", () => pm.response.to.have.status(200));
+      pm.test("Response has success:true", () => {
+        const json = pm.response.json();
+        pm.expect(json.success).to.be.true;
+        pm.expect(json.data).to.be.an('array');
+      });

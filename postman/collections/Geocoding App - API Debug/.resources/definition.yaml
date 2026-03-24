@@ -1,0 +1,5 @@
+$kind: collection
+name: Geocoding App - API Debug
+variables:
+  - key: baseUrl
+    value: 'https://geocoding-app.onrender.com'

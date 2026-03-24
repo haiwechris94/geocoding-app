@@ -1,0 +1,30 @@
+$kind: http-request
+name: POST Search Area
+method: POST
+url: '{{baseUrl}}/api/geocoding/search-area'
+order: 1000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "villageName": "Dakar",
+      "center": { "lat": 14.6928, "lng": -17.4467 },
+      "radius": 20,
+      "filters": {}
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status 200 or 400", () => {
+        pm.expect(pm.response.code).to.be.oneOf([200, 400]);
+      });
+      pm.test("Response is valid JSON", () => {
+        pm.response.json(); // will throw if not JSON
+      });
+      pm.test("No empty body (405 check)", () => {
+        pm.expect(pm.response.text()).to.not.be.empty;
+      });

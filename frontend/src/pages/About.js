@@ -16,7 +16,7 @@ const About = () => {
   const [loadingSources, setLoadingSources] = useState(true);
   const [sourcesError, setSourcesError] = useState(null);
 
-  const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+  const API_BASE = (process.env.REACT_APP_API_URL || 'http://localhost:5000/api').replace(/\/api\/?$/, '');
 
   useEffect(() => {
     const fetchSources = async () => {

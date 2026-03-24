@@ -113,6 +113,104 @@ app.use('/api/villages', villagesRoutes);
 app.use('/api/filters', filtersRoutes);
 app.use('/api/export', exportRoutes);
 
+// ===========================================
+// Geocoding Sources Status / Statut des Sources de Géocodage
+// ===========================================
+
+app.get('/api/sources/status', (req, res) => {
+  try {
+    const { apiConfig } = require('./config/apiConfig');
+
+    const sources = [
+      {
+        id: 'googleMaps',
+        name: 'Google Maps',
+        reliability: apiConfig.googleMaps.reliability,
+        operational: apiConfig.googleMaps.enabled,
+        reason: apiConfig.googleMaps.enabled ? null : {
+          en: 'API key not configured (GOOGLE_MAPS_API_KEY)',
+          fr: 'Clé API non configurée (GOOGLE_MAPS_API_KEY)'
+        }
+      },
+      {
+        id: 'geoNames',
+        name: 'GeoNames',
+        reliability: apiConfig.geoNames.reliability,
+        operational: apiConfig.geoNames.enabled,
+        reason: apiConfig.geoNames.enabled ? null : {
+          en: 'Username not configured (GEONAMES_USERNAME)',
+          fr: "Nom d'utilisateur non configuré (GEONAMES_USERNAME)"
+        }
+      },
+      {
+        id: 'nominatim',
+        name: 'Nominatim (OpenStreetMap)',
+        reliability: apiConfig.nominatim.reliability,
+        operational: apiConfig.nominatim.enabled,
+        reason: null
+      },
+      {
+        id: 'hdx',
+        name: 'HDX — Humanitarian Data Exchange',
+        reliability: apiConfig.hdx.reliability,
+        operational: apiConfig.hdx.enabled,
+        reason: apiConfig.hdx.enabled ? null : {
+          en: 'API key not configured (HDX_API_KEY)',
+          fr: 'Clé API non configurée (HDX_API_KEY)'
+        }
+      },
+      {
+        id: 'photon',
+        name: 'Photon (Komoot)',
+        reliability: apiConfig.photon.reliability,
+        operational: apiConfig.photon.enabled,
+        reason: null
+      },
+      {
+        id: 'mapcarta',
+        name: 'Mapcarta',
+        reliability: apiConfig.mapcarta.reliability,
+        operational: apiConfig.mapcarta.enabled,
+        reason: null
+      },
+      {
+        id: 'openCage',
+        name: 'OpenCage',
+        reliability: apiConfig.openCage.reliability,
+        operational: apiConfig.openCage.enabled,
+        reason: apiConfig.openCage.enabled ? null : {
+          en: 'API key not configured (OPENCAGE_API_KEY)',
+          fr: 'Clé API non configurée (OPENCAGE_API_KEY)'
+        }
+      },
+      {
+        id: 'locationIQ',
+        name: 'LocationIQ',
+        reliability: apiConfig.locationIQ.reliability,
+        operational: apiConfig.locationIQ.enabled,
+        reason: apiConfig.locationIQ.enabled ? null : {
+          en: 'API key not configured (LOCATIONIQ_API_KEY)',
+          fr: 'Clé API non configurée (LOCATIONIQ_API_KEY)'
+        }
+      },
+      {
+        id: 'deepseek',
+        name: 'DeepSeek AI',
+        reliability: null,
+        operational: apiConfig.deepseek.enabled,
+        reason: apiConfig.deepseek.enabled ? null : {
+          en: 'API key not configured (DEEPSEEK_API_KEY)',
+          fr: 'Clé API non configurée (DEEPSEEK_API_KEY)'
+        }
+      }
+    ];
+
+    res.json({ success: true, data: sources });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Import additional services
 const monitoringService = require('./services/monitoringService');
 const webhookService = require('./services/webhookService');

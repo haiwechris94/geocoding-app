@@ -1,82 +1,44 @@
 /**
  * About Page — À propos de
  * Displays: API Documentation link, System Status, Geocoding Sources
+ * Sources are fetched dynamically from the backend at runtime.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import './About.css';
 
-const GEOCODING_SOURCES = [
-  {
-    id: 'googleMaps',
-    name: 'Google Maps',
-    reliability: 0.95,
-    operational: false,
-    reason: { en: 'API key not configured (GOOGLE_MAPS_API_KEY)', fr: 'Clé API non configurée (GOOGLE_MAPS_API_KEY)' },
-  },
-  {
-    id: 'geoNames',
-    name: 'GeoNames',
-    reliability: 0.85,
-    operational: false,
-    reason: { en: 'Username not configured (GEONAMES_USERNAME)', fr: "Nom d'utilisateur non configuré (GEONAMES_USERNAME)" },
-  },
-  {
-    id: 'nominatim',
-    name: 'Nominatim (OpenStreetMap)',
-    reliability: 0.80,
-    operational: true,
-    reason: null,
-  },
-  {
-    id: 'hdx',
-    name: 'HDX — Humanitarian Data Exchange',
-    reliability: 0.75,
-    operational: false,
-    reason: { en: 'API key not configured (HDX_API_KEY)', fr: 'Clé API non configurée (HDX_API_KEY)' },
-  },
-  {
-    id: 'photon',
-    name: 'Photon (Komoot)',
-    reliability: 0.78,
-    operational: true,
-    reason: null,
-  },
-  {
-    id: 'mapcarta',
-    name: 'Mapcarta',
-    reliability: 0.79,
-    operational: true,
-    reason: null,
-  },
-  {
-    id: 'openCage',
-    name: 'OpenCage',
-    reliability: 0.82,
-    operational: false,
-    reason: { en: 'API key not configured (OPENCAGE_API_KEY)', fr: 'Clé API non configurée (OPENCAGE_API_KEY)' },
-  },
-  {
-    id: 'locationIQ',
-    name: 'LocationIQ',
-    reliability: 0.82,
-    operational: false,
-    reason: { en: 'API key not configured (LOCATIONIQ_API_KEY)', fr: 'Clé API non configurée (LOCATIONIQ_API_KEY)' },
-  },
-  {
-    id: 'deepseek',
-    name: 'DeepSeek AI',
-    reliability: null,
-    operational: false,
-    reason: { en: 'API key not configured (DEEPSEEK_API_KEY)', fr: 'Clé API non configurée (DEEPSEEK_API_KEY)' },
-  },
-];
-
 const About = () => {
   const { language } = useLanguage();
   const [sourcesOpen, setSourcesOpen] = useState(true);
+  const [sources, setSources] = useState([]);
+  const [loadingSources, setLoadingSources] = useState(true);
+  const [sourcesError, setSourcesError] = useState(null);
+
+  const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+
+  useEffect(() => {
+    const fetchSources = async () => {
+      try {
+        setLoadingSources(true);
+        setSourcesError(null);
+        const res = await fetch(`${API_BASE}/api/sources/status`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        if (json.success) {
+          setSources(json.data);
+        } else {
+          throw new Error(json.error || 'Unknown error');
+        }
+      } catch (err) {
+        setSourcesError(err.message);
+      } finally {
+        setLoadingSources(false);
+      }
+    };
+    fetchSources();
+  }, [API_BASE]);
 
   const t = {
     en: {
@@ -93,11 +55,12 @@ const About = () => {
       operational: 'Operational',
       notOperational: 'Not operational',
       reliability: 'Reliability',
-      reason: 'Reason',
+      loading: 'Loading sources…',
+      error: 'Unable to load sources',
     },
     fr: {
       title: 'À propos de',
-      subtitle: "Informations sur la plateforme, documentation API et état du système",
+      subtitle: 'Informations sur la plateforme, documentation API et état du système',
       apiDocsTitle: 'Documentation API',
       apiDocsDesc: 'Référence complète de tous les endpoints de géocodage, paramètres et formats de réponse.',
       apiDocsLink: 'Ouvrir la documentation →',
@@ -109,7 +72,8 @@ const About = () => {
       operational: 'Opérationnel',
       notOperational: 'Non opérationnel',
       reliability: 'Fiabilité',
-      reason: 'Raison',
+      loading: 'Chargement des sources…',
+      error: 'Impossible de charger les sources',
     },
   };
 
@@ -163,29 +127,35 @@ const About = () => {
 
         {sourcesOpen && (
           <div className="sources-list">
-            {GEOCODING_SOURCES.map((src) => (
-              <div key={src.id} className={`source-row ${src.operational ? 'op' : 'nop'}`}>
-                <div className="source-main">
-                  <span className="source-name">{src.name}</span>
-                  {src.reliability !== null && (
-                    <span className="source-reliability">
-                      {text.reliability}: {Math.round(src.reliability * 100)}%
+            {loadingSources ? (
+              <p className="sources-loading">{text.loading}</p>
+            ) : sourcesError ? (
+              <p className="sources-error">{text.error}: {sourcesError}</p>
+            ) : (
+              sources.map((src) => (
+                <div key={src.id} className={`source-row ${src.operational ? 'op' : 'nop'}`}>
+                  <div className="source-main">
+                    <span className="source-name">{src.name}</span>
+                    {src.reliability !== null && (
+                      <span className="source-reliability">
+                        {text.reliability}: {Math.round(src.reliability * 100)}%
+                      </span>
+                    )}
+                  </div>
+                  <div className="source-right">
+                    <span className={`status-badge ${src.operational ? 'operational' : 'not-operational'}`}>
+                      <span className="status-dot"></span>
+                      {src.operational ? text.operational : text.notOperational}
                     </span>
-                  )}
+                    {!src.operational && src.reason && (
+                      <span className="source-reason">
+                        {src.reason[language] || src.reason.fr}
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div className="source-right">
-                  <span className={`status-badge ${src.operational ? 'operational' : 'not-operational'}`}>
-                    <span className="status-dot"></span>
-                    {src.operational ? text.operational : text.notOperational}
-                  </span>
-                  {!src.operational && src.reason && (
-                    <span className="source-reason">
-                      {src.reason[language] || src.reason.fr}
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         )}
       </section>

@@ -299,7 +299,7 @@ export const searchAreaAPI = {
       villageName,
       center,
       radius: numericRadius,
-      countryCode
+      filters: countryCode ? { countryCode } : {}
     });
     return response.data;
   }

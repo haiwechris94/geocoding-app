@@ -63,13 +63,15 @@ const AdvancedSearch = () => {
           if (!sName) return null;
           try {
             const geo = await geoAgentAPI.geocode(sName, country || '');
-            if (geo && geo.found && geo.latitude && geo.longitude) {
+            if (geo && geo.success && geo.best) {
+              const lat = geo.best.lat;
+              const lng = geo.best.lng;
               if (searchCenter) {
-                const dist = haversineDistance(searchCenter.lat, searchCenter.lng, geo.latitude, geo.longitude);
+                const dist = haversineDistance(searchCenter.lat, searchCenter.lng, lat, lng);
                 if (dist > searchRadius) return null;
-                return { name: sName, ...geo, distance: parseFloat(dist.toFixed(2)) };
+                return { name: sName, latitude: lat, longitude: lng, source: geo.best.source, confidence: geo.best.confidence, reliability: geo.reliability?.label, distance: parseFloat(dist.toFixed(2)) };
               }
-              return { name: sName, ...geo };
+              return { name: sName, latitude: lat, longitude: lng, source: geo.best.source, confidence: geo.best.confidence, reliability: geo.reliability?.label };
             }
           } catch (e) {}
           return searchCenter ? null : { name: sName };
@@ -125,7 +127,18 @@ const AdvancedSearch = () => {
       } else {
         // No center: GeoAgent direct
         const geo = await geoAgentAPI.geocode(name, country);
-        if (geo && geo.found) candidates = [geo];
+        if (geo && geo.success && geo.best) {
+          candidates = [{
+            ...geo.best,
+            latitude: geo.best.lat,
+            longitude: geo.best.lng,
+            villageName: name,
+            source: geo.best.source,
+            confidence: geo.best.confidence,
+            reliability: geo.reliability?.label,
+            found: true,
+          }];
+        }
       }
 
       if (candidates.length === 0) {
@@ -144,15 +157,24 @@ const AdvancedSearch = () => {
       setAiLoading(true);
       try {
         const geo = await geoAgentAPI.geocode(name, country);
-        if (geo && geo.found) {
+        if (geo && geo.success && geo.best) {
+          const geoNormalized = {
+            ...geo.best,
+            latitude: geo.best.lat,
+            longitude: geo.best.lng,
+            villageName: name,
+            source: geo.best.source,
+            confidence: geo.best.confidence,
+            reliability: geo.reliability?.label,
+          };
           if (searchCenter) {
-            const dist = haversineDistance(searchCenter.lat, searchCenter.lng, geo.latitude, geo.longitude);
+            const dist = haversineDistance(searchCenter.lat, searchCenter.lng, geoNormalized.latitude, geoNormalized.longitude);
             const best = dist <= searchRadius
-              ? { ...geo, distance: parseFloat(dist.toFixed(2)) }
+              ? { ...geoNormalized, distance: parseFloat(dist.toFixed(2)) }
               : candidates.sort((a, b) => (b.confidence || 0) - (a.confidence || 0))[0];
             setAiBestResult(best);
           } else {
-            setAiBestResult(geo);
+            setAiBestResult(geoNormalized);
           }
         } else {
           setAiBestResult(candidates[0]);

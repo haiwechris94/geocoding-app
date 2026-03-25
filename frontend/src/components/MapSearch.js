@@ -26,6 +26,8 @@ const createIcon = (color) => new L.Icon({
 const centerIcon = createIcon('red');
 const resultIcon = createIcon('blue');
 const lowConfidenceIcon = createIcon('orange');
+const suggestionIcon = createIcon('violet');
+const aiIcon = createIcon('gold');
 
 // Map click handler component
 const MapClickHandler = ({ onMapClick }) => {
@@ -43,6 +45,8 @@ const MapSearch = ({
   radius, 
   onRadiusChange, 
   results,
+  suggestionMarkers = [],
+  aiBestResult = null,
   onSearch,
   villageName,
   onVillageNameChange
@@ -52,29 +56,7 @@ const MapSearch = ({
   const [description, setDescription] = useState('');
   
   const radiusOptions = [10, 20, 30, 50, 100];
-
-  // Filter results within radius
-  const filteredResults = results
-    ? results.filter(result => {
-        if (!result.found || !result.latitude || !result.longitude) return false;
-        if (!center) return true;
-        if (result.distance !== undefined && result.distance !== null) {
-          return parseFloat(result.distance) <= radius;
-        }
-        // Haversine formula to calculate distance
-        const R = 6371;
-        const dLat = ((result.latitude - center.lat) * Math.PI) / 180;
-        const dLng = ((result.longitude - center.lng) * Math.PI) / 180;
-        const a =
-          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-          Math.cos((center.lat * Math.PI) / 180) *
-            Math.cos((result.latitude * Math.PI) / 180) *
-            Math.sin(dLng / 2) * Math.sin(dLng / 2);
-        const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return dist <= radius;
-      })
-    : [];
-
+  
   // Default center (Africa)
   const defaultCenter = [4.0, 20.0];
   const mapCenter = center ? [center.lat, center.lng] : defaultCenter;
@@ -178,11 +160,11 @@ const MapSearch = ({
         </div>
 
         {/* Results List */}
-        {filteredResults && filteredResults.length > 0 && (
+        {results && results.length > 0 && (
           <div className="search-results-list">
-            <h4>{t('results.title')} ({filteredResults.length})</h4>
+            <h4>{t('results.title')} ({results.length})</h4>
             <ul>
-              {filteredResults.map((result, index) => (
+              {results.map((result, index) => (
                 <li key={index} className="result-item">
                   <span className="result-name">{result.villageName}</span>
                   {result.found && (
@@ -233,9 +215,44 @@ const MapSearch = ({
             </>
           )}
 
-          {/* Result Markers - only within radius */}
-          {filteredResults.map((result, index) => (
-            result.latitude && result.longitude && (
+          {/* Suggestion Markers */}
+          {suggestionMarkers.map((s, i) => (
+            s.latitude && s.longitude && (
+              <Marker
+                key={`suggestion-${i}`}
+                position={[s.latitude, s.longitude]}
+                icon={suggestionIcon}
+              >
+                <Popup>
+                  <strong>🔍 {s.name}</strong><br />
+                  Lat: {Number(s.latitude).toFixed(4)}<br />
+                  Lng: {Number(s.longitude).toFixed(4)}<br />
+                  {s.distance !== undefined && <>Distance: {s.distance} km<br /></>}
+                  {s.source && <>Source: {s.source}</>}
+                </Popup>
+              </Marker>
+            )
+          ))}
+
+          {/* AI Best Result Marker */}
+          {aiBestResult && aiBestResult.latitude && aiBestResult.longitude && (
+            <Marker
+              position={[aiBestResult.latitude, aiBestResult.longitude]}
+              icon={aiIcon}
+            >
+              <Popup>
+                <strong>🤖 {aiBestResult.villageName || aiBestResult.name}</strong><br />
+                Lat: {Number(aiBestResult.latitude).toFixed(4)}<br />
+                Lng: {Number(aiBestResult.longitude).toFixed(4)}<br />
+                {aiBestResult.source && <>Source: {aiBestResult.source}<br /></>}
+                {aiBestResult.reliability && <>Fiabilité: {aiBestResult.reliability}</>}
+              </Popup>
+            </Marker>
+          )}
+
+          {/* Result Markers */}
+          {results && results.map((result, index) => (
+            result.found && result.latitude && result.longitude && (
               <Marker
                 key={index}
                 position={[result.latitude, result.longitude]}

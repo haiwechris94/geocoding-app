@@ -1,18 +1,42 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
-import { geocodingAPI, aiAPI, searchAreaAPI } from '../services/api';
+import { geocodingAPI, geoAgentAPI } from '../services/api';
 import { toast } from 'react-toastify';
 import MapSearch from '../components/MapSearch';
 import FilterOptions from '../components/FilterOptions';
 import LoadingSpinner from '../components/LoadingSpinner';
 import './AdvancedSearch.css';
 
+// ─── Haversine distance (km) ───────────────────────────────────────────────
+const haversineDistance = (lat1, lng1, lat2, lng2) => {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
+// ─── Filter results within radius ─────────────────────────────────────────
+const filterByRadius = (results, center, radius) => {
+  if (!center || !results) return results || [];
+  return results.filter(r => {
+    if (!r.found || !r.latitude || !r.longitude) return false;
+    const dist = haversineDistance(center.lat, center.lng, r.latitude, r.longitude);
+    r.distance = parseFloat(dist.toFixed(2));
+    return dist <= radius;
+  });
+};
+
 const AdvancedSearch = () => {
   const { t, language } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
-  
+
   const [center, setCenter] = useState(null);
   const [radius, setRadius] = useState(20);
   const [villageName, setVillageName] = useState('');
@@ -20,11 +44,16 @@ const AdvancedSearch = () => {
   const [results, setResults] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isAreaSearching, setIsAreaSearching] = useState(false);
-  const [aiLoading, setAiLoading] = useState(false);
   const [areaSearchResults, setAreaSearchResults] = useState(null);
-  const [villageInfo, setVillageInfo] = useState(null);
-  const [villageInfoLoading, setVillageInfoLoading] = useState(false);
   const [selectedResult, setSelectedResult] = useState(null);
+
+  // AI best result state
+  const [aiBestResult, setAiBestResult] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+
+  // Similar villages suggestions
+  const [suggestions, setSuggestions] = useState([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
 
   // Handle selected result from AdvancedSearchResults page
   useEffect(() => {
@@ -43,35 +72,61 @@ const AdvancedSearch = () => {
     }
   }, [location.state, language]);
 
-  // Haversine distance in km
-  const haversineDistance = (lat1, lng1, lat2, lng2) => {
-    const R = 6371;
-    const dLat = ((lat2 - lat1) * Math.PI) / 180;
-    const dLng = ((lng2 - lng1) * Math.PI) / 180;
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos((lat1 * Math.PI) / 180) *
-        Math.cos((lat2 * Math.PI) / 180) *
-        Math.sin(dLng / 2) * Math.sin(dLng / 2);
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  // ── Fetch similar village suggestions within radius ──────────────────────
+  const fetchSuggestions = async (name, country) => {
+    if (!name || name.trim().length < 2) return;
+    setSuggestionsLoading(true);
+    setSuggestions([]);
+    try {
+      const data = await geoAgentAPI.suggest(name.trim(), country || '');
+      const list = Array.isArray(data) ? data : data.suggestions || [];
+      setSuggestions(list);
+    } catch (err) {
+      console.error('Suggestions error:', err);
+    } finally {
+      setSuggestionsLoading(false);
+    }
   };
 
+  // ── Use GeoAgent to pick best result among candidates ───────────────────
+  const pickBestWithAI = async (candidates, name, country) => {
+    if (!candidates || candidates.length === 0) return null;
+    if (candidates.length === 1) return candidates[0];
+    setAiLoading(true);
+    try {
+      const data = await geoAgentAPI.geocode(name.trim(), country || '');
+      if (data && data.found) {
+        setAiBestResult(data);
+        return data;
+      }
+    } catch (err) {
+      console.error('GeoAgent pick best error:', err);
+    } finally {
+      setAiLoading(false);
+    }
+    return candidates[0];
+  };
+
+  // ── Single village search ────────────────────────────────────────────────
   const handleSearch = async (searchParams) => {
     setIsLoading(true);
-    setResults([]); // Clear previous results on new search
+    setResults([]);
+    setAiBestResult(null);
+    setSuggestions([]);
 
     try {
+      // 1. Call standard geocoding API
       const response = await geocodingAPI.geocodeSingle(searchParams.villageName, {
         ...filters,
         centerLat: searchParams.center?.lat,
         centerLng: searchParams.center?.lng,
-        radius: searchParams.radius
+        radius: searchParams.radius,
       });
 
       if (response.success) {
         const newResult = response.data;
 
-        // Filter by radius if center is defined and result was found
+        // 2. Check distance from center if set
         if (
           newResult.found &&
           searchParams.center &&
@@ -90,17 +145,23 @@ const AdvancedSearch = () => {
                 ? `Village trouvé mais hors du rayon de ${searchParams.radius} km (${dist.toFixed(1)} km)`
                 : `Village found but outside the ${searchParams.radius} km radius (${dist.toFixed(1)} km)`
             );
+            // Still fetch similar suggestions
+            await fetchSuggestions(searchParams.villageName, filters.country);
             return;
           }
           newResult.distance = parseFloat(dist.toFixed(2));
         }
 
-        setResults(prev => [...prev, newResult]);
+        setResults([newResult]);
 
-        if (newResult.found) {
-          toast.success(`${t('results.status.found')}: ${newResult.villageName}`);
-        } else {
+        // 3. If not found, fetch similar suggestions automatically
+        if (!newResult.found) {
           toast.warning(`${t('results.status.notFound')}: ${newResult.villageName}`);
+          await fetchSuggestions(searchParams.villageName, filters.country);
+        } else {
+          toast.success(`${t('results.status.found')}: ${newResult.villageName}`);
+          // Also fetch suggestions in background
+          fetchSuggestions(searchParams.villageName, filters.country);
         }
       }
     } catch (error) {
@@ -111,35 +172,68 @@ const AdvancedSearch = () => {
     }
   };
 
-  // Multi-source area search - find village across all sources
+  // ── Multi-source area search with AI best-pick ───────────────────────────
   const handleSearchArea = async () => {
     if (!villageName.trim()) {
-      toast.warning(language === 'fr' 
-        ? 'Veuillez entrer le nom d\'un village' 
+      toast.warning(language === 'fr'
+        ? 'Veuillez entrer le nom d\'un village'
         : 'Please enter a village name');
       return;
     }
     if (!center) {
-      toast.warning(language === 'fr' 
-        ? 'Veuillez sélectionner un centre sur la carte' 
+      toast.warning(language === 'fr'
+        ? 'Veuillez sélectionner un centre sur la carte'
         : 'Please select a center on the map');
       return;
     }
 
     setIsAreaSearching(true);
     setAreaSearchResults(null);
+    setAiBestResult(null);
+    setSuggestions([]);
 
     try {
-      const result = await searchAreaAPI.searchArea(
-        { lat: center.lat, lng: center.lng },
-        parseFloat(radius),
-        filters?.countryCode || null
-      );
-      
+      const apiBase = process.env.REACT_APP_API_URL || '/api';
+      const response = await fetch(`${apiBase}/geocoding/search-area`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          villageName: villageName.trim(),
+          center: { lat: center.lat, lng: center.lng },
+          radius: parseFloat(radius),
+          filters,
+        }),
+      });
+      const result = await response.json();
+
       if (result.success) {
-        // Store results in sessionStorage and navigate to results page
-        sessionStorage.setItem('advancedSearchResults', JSON.stringify(result.data));
-        navigate('/advanced-search-results');
+        // Filter results within radius
+        const allResults = result.data?.results || result.data || [];
+        const inRadius = filterByRadius(
+          Array.isArray(allResults) ? allResults : [allResults],
+          center,
+          radius
+        );
+
+        if (inRadius.length === 0) {
+          toast.warning(
+            language === 'fr'
+              ? `Aucun village trouvé dans un rayon de ${radius} km`
+              : `No village found within ${radius} km radius`
+          );
+          await fetchSuggestions(villageName, filters.country);
+        } else {
+          // Let AI pick the best result from multiple sources
+          const best = await pickBestWithAI(inRadius, villageName, filters.country);
+
+          // Save to sessionStorage and navigate
+          sessionStorage.setItem('advancedSearchResults', JSON.stringify({
+            ...result.data,
+            results: inRadius,
+            aiBestResult: best,
+          }));
+          navigate('/advanced-search-results');
+        }
       } else {
         toast.error(
           language === 'fr'
@@ -166,9 +260,9 @@ const AdvancedSearch = () => {
         statistics: {
           total: results.length,
           found: results.filter(r => r.found).length,
-          notFound: results.filter(r => !r.found).length
+          notFound: results.filter(r => !r.found).length,
         },
-        filters
+        filters,
       }));
       navigate('/results');
     }
@@ -179,47 +273,8 @@ const AdvancedSearch = () => {
     setVillageName('');
     setCenter(null);
     setAreaSearchResults(null);
-  };
-
-  // Get AI-powered village information
-  const handleGetVillageInfo = async () => {
-    // Check if we have a village name or center coordinates
-    if (!villageName && !center) {
-      toast.warning(language === 'fr' 
-        ? 'Veuillez entrer un nom de village ou sélectionner un point sur la carte' 
-        : 'Please enter a village name or select a point on the map');
-      return;
-    }
-
-    setVillageInfoLoading(true);
-    setVillageInfo(null);
-
-    try {
-      // Use center coordinates if available, otherwise use default coordinates
-      const lat = center?.lat || 0;
-      const lng = center?.lng || 0;
-      const name = villageName || (language === 'fr' ? 'Point sélectionné' : 'Selected point');
-
-      const response = await aiAPI.getVillageInfo(name, lat, lng);
-
-      if (response.success) {
-        setVillageInfo(response.data);
-        toast.success(
-          language === 'fr'
-            ? `Informations récupérées pour ${name}`
-            : `Information retrieved for ${name}`
-        );
-      }
-    } catch (error) {
-      console.error('Village info error:', error);
-      toast.error(
-        language === 'fr'
-          ? 'Erreur lors de la récupération des informations du village'
-          : 'Error retrieving village information'
-      );
-    } finally {
-      setVillageInfoLoading(false);
-    }
+    setAiBestResult(null);
+    setSuggestions([]);
   };
 
   return (
@@ -231,133 +286,7 @@ const AdvancedSearch = () => {
         </header>
 
         {/* Filters */}
-        <FilterOptions
-          filters={filters}
-          onFiltersChange={setFilters}
-        />
-
-        {/* AI Village Info Button */}
-        <div className="ai-section">
-          <button 
-            className="btn btn-ai btn-village-info"
-            onClick={handleGetVillageInfo}
-            disabled={villageInfoLoading || (!villageName && !center)}
-          >
-            {villageInfoLoading 
-              ? '⏳ ' + (language === 'fr' ? 'Chargement...' : 'Loading...') 
-              : '🏘️ ' + (language === 'fr' ? 'Info Village IA' : 'AI Village Info')}
-          </button>
-        </div>
-
-        {/* Village Information Panel */}
-        {villageInfo && (
-          <div className="village-info-panel">
-            <h3>🏘️ {language === 'fr' ? 'Informations sur le Village' : 'Village Information'}</h3>
-            
-            <div className="village-info-content">
-              <div className="info-section">
-                <h4>{language === 'fr' ? 'Localisation' : 'Location'}</h4>
-                <p><strong>{villageInfo.villageName || villageInfo.queriedName}</strong></p>
-                {villageInfo.location && (
-                  <p>
-                    {villageInfo.location.region && `${villageInfo.location.region}, `}
-                    {villageInfo.location.country || ''}
-                  </p>
-                )}
-                {villageInfo.coordinates && (
-                  <p className="coordinates">
-                    📍 {villageInfo.coordinates.latitude?.toFixed(4)}, {villageInfo.coordinates.longitude?.toFixed(4)}
-                  </p>
-                )}
-              </div>
-
-              {villageInfo.population && villageInfo.population.estimate !== 'Unknown' && (
-                <div className="info-section">
-                  <h4>{language === 'fr' ? 'Population' : 'Population'}</h4>
-                  <p>
-                    {villageInfo.population.estimate}
-                    {villageInfo.population.year && ` (${villageInfo.population.year})`}
-                  </p>
-                  {villageInfo.population.source && (
-                    <p className="source">{language === 'fr' ? 'Source' : 'Source'}: {villageInfo.population.source}</p>
-                  )}
-                </div>
-              )}
-
-              {villageInfo.indigenousGroups && villageInfo.indigenousGroups.length > 0 && (
-                <div className="info-section">
-                  <h4>{language === 'fr' ? 'Groupes Ethniques' : 'Indigenous Groups'}</h4>
-                  <ul>
-                    {villageInfo.indigenousGroups.map((group, idx) => (
-                      <li key={idx}>{group}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {villageInfo.historicalNotes && villageInfo.historicalNotes.length > 0 && (
-                <div className="info-section">
-                  <h4>{language === 'fr' ? 'Notes Historiques' : 'Historical Notes'}</h4>
-                  <ul>
-                    {villageInfo.historicalNotes.map((note, idx) => (
-                      <li key={idx}>{note}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {villageInfo.landmarks && villageInfo.landmarks.length > 0 && (
-                <div className="info-section">
-                  <h4>{language === 'fr' ? 'Points d\'Intérêt' : 'Landmarks'}</h4>
-                  <ul>
-                    {villageInfo.landmarks.map((landmark, idx) => (
-                      <li key={idx}>{landmark}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {villageInfo.culturalContext && (
-                <div className="info-section">
-                  <h4>{language === 'fr' ? 'Contexte Culturel' : 'Cultural Context'}</h4>
-                  <p>{villageInfo.culturalContext}</p>
-                </div>
-              )}
-
-              {villageInfo.economicActivities && villageInfo.economicActivities.length > 0 && (
-                <div className="info-section">
-                  <h4>{language === 'fr' ? 'Activités Économiques' : 'Economic Activities'}</h4>
-                  <ul>
-                    {villageInfo.economicActivities.map((activity, idx) => (
-                      <li key={idx}>{activity}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {villageInfo.accessibility && villageInfo.accessibility !== 'Unknown' && (
-                <div className="info-section">
-                  <h4>{language === 'fr' ? 'Accessibilité' : 'Accessibility'}</h4>
-                  <p>{villageInfo.accessibility}</p>
-                </div>
-              )}
-
-              {villageInfo.additionalInfo && (
-                <div className="info-section">
-                  <h4>{language === 'fr' ? 'Informations Supplémentaires' : 'Additional Information'}</h4>
-                  <p>{villageInfo.additionalInfo}</p>
-                </div>
-              )}
-            </div>
-
-            <button 
-              className="btn btn-sm btn-secondary close-village-info"
-              onClick={() => setVillageInfo(null)}
-            >
-              {t('common.close')}
-            </button>
-          </div>
-        )}
+        <FilterOptions filters={filters} onFiltersChange={setFilters} />
 
         {/* Map Search */}
         <MapSearch
@@ -371,17 +300,8 @@ const AdvancedSearch = () => {
           onVillageNameChange={setVillageName}
         />
 
-        {/* Search Buttons */}
+        {/* Single search + multi-source buttons (no duplicate) */}
         <div className="search-buttons-container">
-          <button
-            className="btn btn-primary search-btn"
-            onClick={() => handleSearch({ villageName, center, radius })}
-            disabled={isLoading || !villageName}
-          >
-            {isLoading ? '⏳ ' : '🔍 '}
-            {language === 'fr' ? 'Rechercher le Village' : 'Search Village'}
-          </button>
-          
           <button
             className="btn btn-secondary search-area-btn"
             onClick={handleSearchArea}
@@ -392,6 +312,54 @@ const AdvancedSearch = () => {
           </button>
         </div>
 
+        {/* AI Best Result Banner */}
+        {aiBestResult && (
+          <div className="ai-best-result-banner">
+            <span className="ai-badge">🤖 {language === 'fr' ? 'Meilleur résultat IA' : 'AI Best Result'}</span>
+            <strong>{aiBestResult.villageName}</strong>
+            {aiBestResult.latitude && (
+              <span className="ai-coords">
+                {aiBestResult.latitude.toFixed(5)}, {aiBestResult.longitude.toFixed(5)}
+              </span>
+            )}
+            {aiBestResult.reliability && (
+              <span className={`reliability-badge reliability-${aiBestResult.reliability.toLowerCase()}`}>
+                {aiBestResult.reliability}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Similar Village Suggestions */}
+        {(suggestions.length > 0 || suggestionsLoading) && (
+          <div className="suggestions-panel">
+            <h4 className="suggestions-title">
+              🔍 {language === 'fr' ? 'Villages similaires suggérés' : 'Similar village suggestions'}
+            </h4>
+            {suggestionsLoading ? (
+              <p className="suggestions-loading">
+                {language === 'fr' ? 'Chargement des suggestions...' : 'Loading suggestions...'}
+              </p>
+            ) : (
+              <div className="suggestions-chips">
+                {suggestions.map((s, i) => {
+                  const name = typeof s === 'string' ? s : s.name || s.villageName || s;
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      className="suggestion-chip"
+                      onClick={() => setVillageName(name)}
+                    >
+                      {name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Area Search Results Summary */}
         {areaSearchResults && (
           <div className="area-search-summary">
@@ -400,20 +368,9 @@ const AdvancedSearch = () => {
             </h3>
             <div className="area-stats">
               <span className="stat-item">
-                <strong>{areaSearchResults.count}</strong> 
+                <strong>{areaSearchResults.count}</strong>
                 {language === 'fr' ? ' emplacements trouvés' : ' locations found'}
               </span>
-              {areaSearchResults.statistics?.byType && (
-                <div className="type-breakdown">
-                  {Object.entries(areaSearchResults.statistics.byType).map(([type, count]) => (
-                    count > 0 && (
-                      <span key={type} className="type-stat">
-                        {type}: {count}
-                      </span>
-                    )
-                  ))}
-                </div>
-              )}
             </div>
           </div>
         )}
@@ -443,23 +400,20 @@ const AdvancedSearch = () => {
           </div>
         )}
 
-        {/* Loading */}
+        {/* Loaders */}
         {isLoading && <LoadingSpinner message={t('common.processing')} />}
-        {aiLoading && <LoadingSpinner message={t('ai.loading')} />}
-        {villageInfoLoading && (
-          <LoadingSpinner 
-            message={language === 'fr' 
-              ? 'Récupération des informations du village...' 
-              : 'Retrieving village information...'
-            } 
+        {aiLoading && (
+          <LoadingSpinner
+            message={language === 'fr'
+              ? '🤖 Analyse IA en cours...'
+              : '🤖 AI analysis in progress...'}
           />
         )}
         {isAreaSearching && (
-          <LoadingSpinner 
-            message={language === 'fr' 
-              ? 'Recherche des emplacements dans la zone...' 
-              : 'Searching for locations in area...'
-            } 
+          <LoadingSpinner
+            message={language === 'fr'
+              ? 'Recherche des emplacements dans la zone...'
+              : 'Searching for locations in area...'}
           />
         )}
       </div>

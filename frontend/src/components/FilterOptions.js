@@ -14,16 +14,26 @@ const FilterOptions = ({ filters, onFiltersChange }) => {
   // Load countries on mount
   useEffect(() => {
     const loadCountries = async () => {
-      try {
-        const response = await filtersAPI.getCountries();
-        if (response.success) {
-          setCountries(response.data.countries);
+      const maxRetries = 3;
+      const delays = [500, 1000, 2000];
+      let lastError;
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          const response = await filtersAPI.getCountries();
+          if (response.success) {
+            setCountries(response.data.countries);
+            setLoading(prev => ({ ...prev, countries: false }));
+            return;
+          }
+        } catch (error) {
+          lastError = error;
+          if (attempt < maxRetries - 1) {
+            await new Promise(resolve => setTimeout(resolve, delays[attempt]));
+          }
         }
-      } catch (error) {
-        console.error('Error loading countries:', error);
-      } finally {
-        setLoading(prev => ({ ...prev, countries: false }));
       }
+      console.error('Error loading countries:', lastError);
+      setLoading(prev => ({ ...prev, countries: false }));
     };
     loadCountries();
   }, []);

@@ -289,13 +289,14 @@ export const aiAPI = {
 
 export const searchAreaAPI = {
   // Search for all locations within radius
-  searchArea: async (center, radius, countryCode = null) => {
+  searchArea: async (villageName, center, radius, countryCode = null) => {
     // Ensure radius is a number
     const numericRadius = typeof radius === 'number' ? radius : parseInt(radius, 10) || 20;
     
-    console.log('[API] searchArea called with:', { center, radius: numericRadius, countryCode });
+    console.log('[API] searchArea called with:', { villageName, center, radius: numericRadius, countryCode });
     
     const response = await api.post('/geocoding/search-area', {
+      villageName,
       center,
       radius: numericRadius,
       countryCode

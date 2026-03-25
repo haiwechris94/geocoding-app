@@ -36,6 +36,7 @@ const schemas = {
   // Search area
   searchArea: {
     body: {
+      villageName: { type: 'string', required: true, minLength: 1, maxLength: 200 },
       center: { 
         type: 'object', 
         required: true,

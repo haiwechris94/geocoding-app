@@ -439,35 +439,28 @@ app.get('/', (req, res) => {
   });
 });
 
-const { geoAgent, suggestSimilarVillages } = require("./services/geoAgent");
+// GeoAgent routes
+const { geoAgent, suggestSimilarVillages } = require('./services/geoAgent');
 
-// Route géocodage principal
-app.get("/api/ai-geocode", async (req, res) => {
+app.get('/api/ai-geocode', async (req, res) => {
   try {
     const { village, country } = req.query;
-    if (!village || !country) {
-      return res.status(400).json({ error: "Village and country are required" });
-    }
-    const result = await geoAgent(village, country);
+    if (!village) return res.status(400).json({ success: false, error: 'village is required' });
+    const result = await geoAgent(village, country || '');
     res.json(result);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Server error" });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
   }
 });
 
-// Route suggestions de noms similaires
-app.get("/api/ai-suggest", async (req, res) => {
+app.get('/api/ai-suggest', async (req, res) => {
   try {
     const { village, country } = req.query;
-    if (!village || !country) {
-      return res.status(400).json({ error: "Village and country are required" });
-    }
-    const result = await suggestSimilarVillages(village, country);
+    if (!village) return res.status(400).json({ success: false, error: 'village is required' });
+    const result = await suggestSimilarVillages(village, country || '');
     res.json(result);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Server error" });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
   }
 });
 

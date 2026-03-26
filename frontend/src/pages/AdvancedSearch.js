@@ -113,7 +113,10 @@ const AdvancedSearch = () => {
           searchRadius,
           country || null
         );
-        const raw = areaData?.results || areaData?.data?.results || [];
+        const sourceResults = areaData?.data?.sourceResults || areaData?.sourceResults || [];
+        const raw = sourceResults.length > 0
+          ? sourceResults.flatMap(s => (s.results || []).map(r => ({ ...r, sourceName: s.source })))
+          : (areaData?.data?.results || areaData?.results || []);
         candidates = raw
           .map(r => {
             const lat = r.latitude || r.lat;

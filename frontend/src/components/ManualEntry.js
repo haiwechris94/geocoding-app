@@ -26,7 +26,7 @@ const ManualEntry = ({ onVillagesChange, villages }) => {
 
   const villageCount = villages.filter(v => v.length > 0).length;
   const maxVillages = 1000;
-  const recommendedMax = 50;
+  const recommendedMax = 100;
 
   // Get status color based on count
   const getCountStatus = () => {
@@ -52,8 +52,8 @@ const ManualEntry = ({ onVillagesChange, villages }) => {
       <div className="capacity-info">
         <span className="capacity-badge">
           ✓ {language === 'fr' 
-            ? `Capacité: 50` 
-            : `Capacity: 50`}
+            ? `Capacité: 100` 
+            : `Capacity: 100`}
         </span>
       </div>
       

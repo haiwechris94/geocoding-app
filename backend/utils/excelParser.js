@@ -27,7 +27,6 @@ const parseExcelFile = (filePath, options = {}) => {
     
     // Convert to JSON with headers
     const jsonData = XLSX.utils.sheet_to_json(worksheet, {
-      header: options.hasHeaders !== false ? 1 : undefined,
       defval: '',
       raw: false
     });

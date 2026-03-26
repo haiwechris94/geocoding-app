@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
-import { geoAgentAPI, searchAreaAPI } from '../services/api';
+import { geoAgentAPI, searchAreaAPI, geocodingAPI } from '../services/api';
 import { toast } from 'react-toastify';
 import MapSearch from '../components/MapSearch';
 import FilterOptions from '../components/FilterOptions';
@@ -21,33 +21,40 @@ const haversineDistance = (lat1, lng1, lat2, lng2) => {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
+// ─── Normalize a result object ─────────────────────────────────────────────
+const normalizeResult = (r) => {
+  const lat = parseFloat(r.latitude || r.lat || 0);
+  const lng = parseFloat(r.longitude || r.lng || 0);
+  return { ...r, latitude: lat, longitude: lng };
+};
+
 const AdvancedSearch = () => {
   const { t, language } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [center, setCenter] = useState(null);
-  const [radius, setRadius] = useState(20);
-  const [villageName, setVillageName] = useState('');
-  const [filters, setFilters] = useState({});
-  const [results, setResults] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [aiBestResult, setAiBestResult] = useState(null);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [suggestions, setSuggestions] = useState([]);
+  const [center, setCenter]                       = useState(null);
+  const [radius, setRadius]                       = useState(20);
+  const [villageName, setVillageName]             = useState('');
+  const [filters, setFilters]                     = useState({});
+  const [results, setResults]                     = useState([]);
+  const [isLoading, setIsLoading]                 = useState(false);
+  const [aiBestResult, setAiBestResult]           = useState(null);
+  const [aiLoading, setAiLoading]                 = useState(false);
+  const [suggestions, setSuggestions]             = useState([]);
   const [suggestionMarkers, setSuggestionMarkers] = useState([]);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [selectedSuggestion, setSelectedSuggestion] = useState(null);
 
   useEffect(() => {
     if (location.state?.selectedResult) {
-      const result = location.state.selectedResult;
-      setVillageName(result.name || '');
-      if (result.lat && result.lng) setCenter({ lat: result.lat, lng: result.lng });
+      const r = location.state.selectedResult;
+      setVillageName(r.name || '');
+      if (r.lat && r.lng) setCenter({ lat: r.lat, lng: r.lng });
     }
   }, [location.state]);
 
-  // ── Fetch suggestions filtered by radius ──────────────────────────────────
+  // ── Fetch similar name suggestions (no mandatory radius filtering) ─────────
   const fetchSuggestions = async (name, country, searchCenter, searchRadius) => {
     if (!name || name.trim().length < 2) return;
     setSuggestionsLoading(true);
@@ -55,40 +62,55 @@ const AdvancedSearch = () => {
     setSuggestionMarkers([]);
     try {
       const data = await geoAgentAPI.suggest(name.trim(), country || '');
-      const list = Array.isArray(data) ? data : data.suggestions || [];
+      const rawList = Array.isArray(data) ? data : (data?.suggestions || []);
 
-      const enriched = await Promise.all(
-        list.slice(0, 8).map(async (s) => {
-          const sName = typeof s === 'string' ? s : s.name || s.villageName || '';
+      // Build suggestion objects — try geocoding each, but don't discard on failure
+      const enriched = await Promise.allSettled(
+        rawList.slice(0, 8).map(async (s) => {
+          const sName = typeof s === 'string' ? s : (s?.name || s?.villageName || '');
           if (!sName) return null;
           try {
             const geo = await geoAgentAPI.geocode(sName, country || '');
-            if (geo && geo.success && geo.best) {
-              const lat = geo.best.lat;
-              const lng = geo.best.lng;
+            if (geo?.found && geo.latitude && geo.longitude) {
+              const item = { name: sName, ...geo };
               if (searchCenter) {
-                const dist = haversineDistance(searchCenter.lat, searchCenter.lng, lat, lng);
-                if (dist > searchRadius) return null;
-                return { name: sName, latitude: lat, longitude: lng, source: geo.best.source, confidence: geo.best.confidence, reliability: geo.reliability?.label, distance: parseFloat(dist.toFixed(2)) };
+                const dist = haversineDistance(
+                  searchCenter.lat, searchCenter.lng, geo.latitude, geo.longitude
+                );
+                item.distance = parseFloat(dist.toFixed(2));
+                item.withinRadius = dist <= searchRadius;
               }
-              return { name: sName, latitude: lat, longitude: lng, source: geo.best.source, confidence: geo.best.confidence, reliability: geo.reliability?.label };
+              return item;
             }
-          } catch (e) {}
-          return searchCenter ? null : { name: sName };
+          } catch (e) {
+            console.warn('[Suggestions] geocode failed for', sName, e.message);
+          }
+          // Return name-only if geocoding failed — still show it
+          return { name: sName };
         })
       );
 
-      const filtered = enriched.filter(Boolean);
-      setSuggestions(filtered);
-      setSuggestionMarkers(filtered.filter(s => s.latitude && s.longitude));
+      const items = enriched
+        .filter(r => r.status === 'fulfilled' && r.value)
+        .map(r => r.value);
+
+      // Sort: within radius first, then alphabetical
+      items.sort((a, b) => {
+        if (a.withinRadius && !b.withinRadius) return -1;
+        if (!a.withinRadius && b.withinRadius) return 1;
+        return a.name.localeCompare(b.name);
+      });
+
+      setSuggestions(items);
+      setSuggestionMarkers(items.filter(s => s.latitude && s.longitude));
     } catch (err) {
-      console.error('Suggestions error:', err);
+      console.error('[Suggestions] error:', err);
     } finally {
       setSuggestionsLoading(false);
     }
   };
 
-  // ── Main search: multi-source + AI best pick ──────────────────────────────
+  // ── Main search ────────────────────────────────────────────────────────────
   const handleSearch = async (searchParams) => {
     setIsLoading(true);
     setResults([]);
@@ -97,107 +119,156 @@ const AdvancedSearch = () => {
     setSuggestionMarkers([]);
     setSelectedSuggestion(null);
 
-    const searchCenter = searchParams.center || center;
-    const searchRadius = searchParams.radius || radius;
-    const name = searchParams.villageName || villageName;
-    const country = filters.country || '';
+    const searchCenter = searchParams?.center ?? center;
+    const searchRadius = searchParams?.radius ?? radius;
+    const name        = searchParams?.villageName ?? villageName;
+    const country     = filters?.country || '';
+
+    if (!name || !name.trim()) {
+      toast.warning(language === 'fr' ? 'Entrez un nom de village' : 'Enter a village name');
+      setIsLoading(false);
+      return;
+    }
 
     try {
       let candidates = [];
 
+      // ── Step 1: try search-area (multi-source) ──────────────────────────
       if (searchCenter) {
-        // Multi-source search within radius
-        const areaData = await searchAreaAPI.searchArea(
-          name,
-          { lat: searchCenter.lat, lng: searchCenter.lng },
-          searchRadius,
-          country || null
-        );
-        const sourceResults = areaData?.data?.sourceResults || areaData?.sourceResults || [];
-        const raw = sourceResults.length > 0
-          ? sourceResults.flatMap(s => (s.results || []).map(r => ({ ...r, sourceName: s.source })))
-          : (areaData?.data?.results || areaData?.results || []);
-        candidates = raw
-          .map(r => {
-            const lat = r.latitude || r.lat;
-            const lng = r.longitude || r.lng;
-            if (!lat || !lng) return null;
-            const dist = haversineDistance(searchCenter.lat, searchCenter.lng, lat, lng);
-            if (dist > searchRadius) return null;
-            return { ...r, latitude: lat, longitude: lng, distance: parseFloat(dist.toFixed(2)) };
-          })
-          .filter(Boolean);
-      } else {
-        // No center: GeoAgent direct
-        const geo = await geoAgentAPI.geocode(name, country);
-        if (geo && geo.success && geo.best) {
-          candidates = [{
-            ...geo.best,
-            latitude: geo.best.lat,
-            longitude: geo.best.lng,
-            villageName: name,
-            source: geo.best.source,
-            confidence: geo.best.confidence,
-            reliability: geo.reliability?.label,
-            found: true,
-          }];
+        try {
+          console.log('[Search] calling searchAreaAPI with', { name, searchCenter, searchRadius, country });
+          const areaData = await searchAreaAPI.searchArea(
+            name, { lat: searchCenter.lat, lng: searchCenter.lng },
+            searchRadius, country || null
+          );
+          console.log('[Search] searchAreaAPI response:', areaData);
+
+          const raw = areaData?.results
+            || areaData?.data?.results
+            || areaData?.data
+            || [];
+
+          const list = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+
+          candidates = list
+            .map(r => {
+              const nr = normalizeResult(r);
+              if (!nr.latitude || !nr.longitude) return null;
+              const dist = haversineDistance(searchCenter.lat, searchCenter.lng, nr.latitude, nr.longitude);
+              if (dist > searchRadius) return null;
+              return { ...nr, distance: parseFloat(dist.toFixed(2)) };
+            })
+            .filter(Boolean);
+
+          console.log('[Search] candidates after radius filter:', candidates.length);
+        } catch (areaErr) {
+          console.warn('[Search] searchAreaAPI failed, falling back to geocodeSingle:', areaErr.message);
         }
       }
 
+      // ── Step 2: fallback — geocodeSingle ───────────────────────────────
+      if (candidates.length === 0) {
+        try {
+          console.log('[Search] trying geocodeSingle fallback');
+          const singleResp = await geocodingAPI.geocodeSingle(name, {
+            ...filters,
+            centerLat: searchCenter?.lat,
+            centerLng: searchCenter?.lng,
+            radius: searchRadius,
+          });
+          console.log('[Search] geocodeSingle response:', singleResp);
+          if (singleResp?.success && singleResp?.data?.found) {
+            const nr = normalizeResult(singleResp.data);
+            if (searchCenter && nr.latitude && nr.longitude) {
+              const dist = haversineDistance(searchCenter.lat, searchCenter.lng, nr.latitude, nr.longitude);
+              if (dist <= searchRadius) {
+                candidates = [{ ...nr, distance: parseFloat(dist.toFixed(2)) }];
+              }
+            } else if (nr.latitude) {
+              candidates = [nr];
+            }
+          }
+        } catch (singleErr) {
+          console.warn('[Search] geocodeSingle also failed:', singleErr.message);
+        }
+      }
+
+      // ── Step 3: fallback — GeoAgent direct ────────────────────────────
+      if (candidates.length === 0) {
+        try {
+          console.log('[Search] trying GeoAgent direct fallback');
+          const geo = await geoAgentAPI.geocode(name, country);
+          console.log('[Search] GeoAgent response:', geo);
+          if (geo?.found && geo.latitude && geo.longitude) {
+            const nr = normalizeResult(geo);
+            if (searchCenter) {
+              const dist = haversineDistance(searchCenter.lat, searchCenter.lng, nr.latitude, nr.longitude);
+              if (dist <= searchRadius) {
+                candidates = [{ ...nr, distance: parseFloat(dist.toFixed(2)) }];
+              }
+            } else {
+              candidates = [nr];
+            }
+          }
+        } catch (geoErr) {
+          console.warn('[Search] GeoAgent also failed:', geoErr.message);
+        }
+      }
+
+      // ── No results found ───────────────────────────────────────────────
       if (candidates.length === 0) {
         toast.warning(
           language === 'fr'
-            ? `Aucun village trouvé dans le rayon de ${searchRadius} km`
-            : `No village found within ${searchRadius} km radius`
+            ? `Aucun village "${name}" trouvé dans le rayon de ${searchRadius} km — voici des suggestions`
+            : `No village "${name}" found within ${searchRadius} km — here are suggestions`
         );
         await fetchSuggestions(name, country, searchCenter, searchRadius);
         return;
       }
 
+      // ── Results found ──────────────────────────────────────────────────
       setResults(candidates);
-
-      // AI picks best
-      setAiLoading(true);
-      try {
-        const geo = await geoAgentAPI.geocode(name, country);
-        if (geo && geo.success && geo.best) {
-          const geoNormalized = {
-            ...geo.best,
-            latitude: geo.best.lat,
-            longitude: geo.best.lng,
-            villageName: name,
-            source: geo.best.source,
-            confidence: geo.best.confidence,
-            reliability: geo.reliability?.label,
-          };
-          if (searchCenter) {
-            const dist = haversineDistance(searchCenter.lat, searchCenter.lng, geoNormalized.latitude, geoNormalized.longitude);
-            const best = dist <= searchRadius
-              ? { ...geoNormalized, distance: parseFloat(dist.toFixed(2)) }
-              : candidates.sort((a, b) => (b.confidence || 0) - (a.confidence || 0))[0];
-            setAiBestResult(best);
-          } else {
-            setAiBestResult(geoNormalized);
-          }
-        } else {
-          setAiBestResult(candidates[0]);
-        }
-      } catch (e) {
-        setAiBestResult(candidates[0]);
-      } finally {
-        setAiLoading(false);
-      }
-
       toast.success(
         language === 'fr'
           ? `${candidates.length} résultat(s) trouvé(s)`
           : `${candidates.length} result(s) found`
       );
 
+      // ── Step 4: AI picks best ──────────────────────────────────────────
+      setAiLoading(true);
+      try {
+        const geo = await geoAgentAPI.geocode(name, country);
+        if (geo?.found && geo.latitude && geo.longitude) {
+          const nr = normalizeResult(geo);
+          if (searchCenter) {
+            const dist = haversineDistance(searchCenter.lat, searchCenter.lng, nr.latitude, nr.longitude);
+            if (dist <= searchRadius) {
+              setAiBestResult({ ...nr, distance: parseFloat(dist.toFixed(2)) });
+            } else {
+              // AI result outside radius → use best candidate by confidence
+              const best = [...candidates].sort(
+                (a, b) => (b.confidence || b.score || 0) - (a.confidence || a.score || 0)
+              )[0];
+              setAiBestResult(best);
+            }
+          } else {
+            setAiBestResult(nr);
+          }
+        } else {
+          setAiBestResult(candidates[0]);
+        }
+      } catch (aiErr) {
+        console.warn('[AI] pick best failed:', aiErr.message);
+        setAiBestResult(candidates[0]);
+      } finally {
+        setAiLoading(false);
+      }
+
+      // ── Step 5: fetch suggestions in background ────────────────────────
       fetchSuggestions(name, country, searchCenter, searchRadius);
 
     } catch (error) {
-      console.error('Search error:', error);
+      console.error('[Search] unexpected error:', error);
       toast.error(t('messages.geocodingError'));
       await fetchSuggestions(name, country, searchCenter, searchRadius);
     } finally {
@@ -242,7 +313,6 @@ const AdvancedSearch = () => {
 
         <FilterOptions filters={filters} onFiltersChange={setFilters} />
 
-        {/* Map — single Search Village button inside MapSearch */}
         <MapSearch
           center={center}
           onCenterChange={setCenter}
@@ -294,11 +364,11 @@ const AdvancedSearch = () => {
           </div>
         )}
 
-        {/* Similar Villages within radius */}
+        {/* Similar Villages */}
         {(suggestions.length > 0 || suggestionsLoading) && (
           <div className="suggestions-panel">
             <h4 className="suggestions-title">
-              🔍 {language === 'fr' ? 'Villages similaires dans le rayon' : 'Similar villages within radius'}
+              🔍 {language === 'fr' ? 'Villages similaires suggérés' : 'Similar village suggestions'}
             </h4>
             {suggestionsLoading ? (
               <p className="suggestions-loading">
@@ -310,12 +380,14 @@ const AdvancedSearch = () => {
                   <button
                     key={i}
                     type="button"
-                    className={`suggestion-chip ${selectedSuggestion?.name === s.name ? 'active' : ''}`}
+                    className={`suggestion-chip ${selectedSuggestion?.name === s.name ? 'active' : ''} ${s.withinRadius === false ? 'out-of-radius' : ''}`}
                     onClick={() => handleSuggestionClick(s)}
                     title={s.latitude ? `${Number(s.latitude).toFixed(4)}, ${Number(s.longitude).toFixed(4)}` : ''}
                   >
                     {s.name}
-                    {s.distance !== undefined && <span className="chip-distance">{s.distance} km</span>}
+                    {s.distance !== undefined && (
+                      <span className="chip-distance">{s.distance} km</span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -342,8 +414,12 @@ const AdvancedSearch = () => {
           </div>
         )}
 
-        {isLoading && <LoadingSpinner message={language === 'fr' ? 'Recherche multi-sources...' : 'Multi-source search...'} />}
-        {aiLoading && <LoadingSpinner message={language === 'fr' ? '🤖 Analyse IA...' : '🤖 AI analysis...'} />}
+        {isLoading && (
+          <LoadingSpinner message={language === 'fr' ? 'Recherche en cours...' : 'Searching...'} />
+        )}
+        {aiLoading && (
+          <LoadingSpinner message={language === 'fr' ? '🤖 Analyse IA...' : '🤖 AI analysis...'} />
+        )}
       </div>
     </div>
   );

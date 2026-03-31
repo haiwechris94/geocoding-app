@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { geocodingAPI } from '../services/api';
@@ -8,18 +8,6 @@ import ManualEntry from '../components/ManualEntry';
 import FilterOptions from '../components/FilterOptions';
 import LoadingSpinner from '../components/LoadingSpinner';
 import './BatchGeocode.css';
-
-const SOURCES = [
-  { id: 'nominatim',  name: 'Nominatim (OSM)',        icon: '🗺️',  free: true,  reliability: 80 },
-  { id: 'geonames',   name: 'GeoNames',               icon: '🌍',  free: true,  reliability: 85 },
-  { id: 'opencage',   name: 'OpenCage',               icon: '🔑',  free: false, reliability: 82 },
-  { id: 'photon',     name: 'Photon (Komoot)',         icon: '⚡',  free: true,  reliability: 78 },
-  { id: 'overpass',   name: 'Overpass (OSM Avancé)',   icon: '🔍',  free: true,  reliability: 88 },
-  { id: 'wikidata',   name: 'Wikidata / Wikipedia',    icon: '📚',  free: true,  reliability: 90 },
-  { id: 'brave',      name: 'Brave Search',            icon: '🦁',  free: false, reliability: 65 },
-  { id: 'google',     name: 'Google Maps',             icon: '📍',  free: false, reliability: 95 },
-  { id: 'geoagent',   name: 'GeoAgent IA (DeepSeek)', icon: '🤖',  free: false, reliability: 95 },
-];
 
 const BatchGeocode = () => {
   const { t, language } = useLanguage();
@@ -39,16 +27,6 @@ const BatchGeocode = () => {
   const [currentVillage, setCurrentVillage] = useState('');
   const [liveStats, setLiveStats] = useState({ found: 0, notFound: 0, lowConf: 0 });
   const [results, setResults] = useState(null);
-  const [sourcesStatus, setSourcesStatus] = useState({});
-
-  // Load sources status on mount
-  useEffect(() => {
-    geocodingAPI.getSourcesStatus()
-      .then(res => {
-        if (res.success) setSourcesStatus(res.data.sources || {});
-      })
-      .catch(() => {});
-  }, []);
 
   const handleFileSelect = async (file) => {
     if (!file) {
@@ -165,38 +143,18 @@ const BatchGeocode = () => {
     return villages.length > 0;
   };
 
-  const isSourceActive = (sourceId) => {
-    const s = sourcesStatus[sourceId];
-    if (!s) return sourceId === 'nominatim' || sourceId === 'photon' || sourceId === 'overpass' || sourceId === 'wikidata' || sourceId === 'geoagent';
-    return s.enabled && s.available;
-  };
-
   const texts = {
     fr: {
-      sourcesTitle: '🔌 Sources de géocodage actives',
-      sourcesSubtitle: 'Toutes ces sources sont interrogées en parallèle pour chaque village',
       geoAgentLabel: '🤖 Utiliser GeoAgent IA (recommandé)',
       geoAgentDesc: 'Agrège toutes les sources + scoring DeepSeek pour le meilleur résultat',
-      active: 'Actif',
-      inactive: 'Inactif',
-      free: 'Gratuit',
-      paid: 'Clé API',
-      reliability: 'Fiabilité',
       progressLabel: 'Village en cours :',
       statsFound: 'Trouvés',
       statsNotFound: 'Non trouvés',
       statsLowConf: 'Confiance faible',
     },
     en: {
-      sourcesTitle: '🔌 Active geocoding sources',
-      sourcesSubtitle: 'All these sources are queried in parallel for each village',
       geoAgentLabel: '🤖 Use GeoAgent AI (recommended)',
       geoAgentDesc: 'Aggregates all sources + DeepSeek scoring for the best result',
-      active: 'Active',
-      inactive: 'Inactive',
-      free: 'Free',
-      paid: 'API Key',
-      reliability: 'Reliability',
       progressLabel: 'Current village:',
       statsFound: 'Found',
       statsNotFound: 'Not found',
@@ -212,46 +170,6 @@ const BatchGeocode = () => {
           <h1 className="page-title">{t('batch.title')}</h1>
           <p className="page-subtitle">{t('batch.subtitle')}</p>
         </header>
-
-        {/* Sources Panel */}
-        <div className="sources-panel card">
-          <h3 className="sources-title">{tx.sourcesTitle}</h3>
-          <p className="sources-subtitle">{tx.sourcesSubtitle}</p>
-          <div className="sources-grid">
-            {SOURCES.map(src => {
-              const active = isSourceActive(src.id);
-              return (
-                <div key={src.id} className={`source-badge ${active ? 'source-active' : 'source-inactive'}`}>
-                  <span className="source-icon">{src.icon}</span>
-                  <div className="source-info">
-                    <span className="source-name">{src.name}</span>
-                    <div className="source-meta">
-                      <span className={`source-status ${active ? 'status-on' : 'status-off'}`}>
-                        {active ? tx.active : tx.inactive}
-                      </span>
-                      <span className="source-type">{src.free ? tx.free : tx.paid}</span>
-                      <span className="source-reliability">{tx.reliability}: {src.reliability}%</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* GeoAgent toggle */}
-          <div className="geoagent-toggle">
-            <label className="toggle-label">
-              <input
-                type="checkbox"
-                checked={useGeoAgent}
-                onChange={e => setUseGeoAgent(e.target.checked)}
-                className="toggle-checkbox"
-              />
-              <span className="toggle-text">{tx.geoAgentLabel}</span>
-            </label>
-            <p className="toggle-desc">{tx.geoAgentDesc}</p>
-          </div>
-        </div>
 
         {/* Tabs */}
         <div className="tabs">

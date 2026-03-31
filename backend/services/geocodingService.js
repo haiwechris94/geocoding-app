@@ -362,6 +362,30 @@ const geocodeSingleVillage = async (villageName, filters = {}) => {
   // Get results from all APIs
   let results = await geocodeWithAllAPIs(searchQuery, filters);
 
+  // Enrich with GeoAgent (multi-source + AI scoring)
+  try {
+    const { geoAgent } = require('./geoAgent');
+    const agentResult = await geoAgent(villageName, filters.country || filters.countryCode || '');
+    if (agentResult && agentResult.found && agentResult.latitude && agentResult.longitude) {
+      // Add geoAgent best result as a high-priority candidate
+      results.unshift({
+        source: agentResult.source || 'GeoAgent (AI)',
+        sourceFR: agentResult.source || 'GeoAgent (IA)',
+        latitude: agentResult.latitude,
+        longitude: agentResult.longitude,
+        formattedAddress: agentResult.label || agentResult.villageName || villageName,
+        country: agentResult.country,
+        region: agentResult.region,
+        reliability: agentResult.aiSelected ? 0.95 : 0.88,
+        aiSelected: agentResult.aiSelected || false,
+        alternatives: agentResult.alternatives || [],
+        raw: agentResult
+      });
+    }
+  } catch (agentErr) {
+    console.warn('[GeocodingService] GeoAgent enrichment failed:', agentErr.message);
+  }
+
   // Filter results by radius if center coordinates and radius are provided
   if (filters.centerLat && filters.centerLng && filters.radius) {
     const centerLat = parseFloat(filters.centerLat);

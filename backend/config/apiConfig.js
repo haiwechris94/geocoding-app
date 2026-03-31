@@ -140,6 +140,47 @@ const apiConfig = {
     },
     maxTokens: 2000,
     temperature: 0.7
+  },
+
+  // ===========================================
+  // Overpass API (OpenStreetMap Advanced)
+  // ===========================================
+  overpass: {
+    baseUrl: 'https://overpass-api.de/api/interpreter',
+    enabled: true, // Always enabled (free)
+    rateLimit: {
+      requestsPerMinute: 10
+    },
+    reliability: 0.88,
+    priority: 3
+  },
+
+  // ===========================================
+  // Wikidata / Wikipedia API
+  // ===========================================
+  wikidata: {
+    baseUrl: 'https://www.wikidata.org/w/api.php',
+    sparqlUrl: 'https://query.wikidata.org/sparql',
+    enabled: true, // Always enabled (free)
+    rateLimit: {
+      requestsPerSecond: 5
+    },
+    reliability: 0.90,
+    priority: 2
+  },
+
+  // ===========================================
+  // Brave Search API
+  // ===========================================
+  braveSearch: {
+    baseUrl: 'https://api.search.brave.com/res/v1/web/search',
+    enabled: !!process.env.BRAVE_SEARCH_API_KEY,
+    apiKey: process.env.BRAVE_SEARCH_API_KEY,
+    rateLimit: {
+      requestsPerMonth: 2000
+    },
+    reliability: 0.65,
+    priority: 9
   }
 };
 

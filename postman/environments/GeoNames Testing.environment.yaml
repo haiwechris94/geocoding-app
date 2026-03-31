@@ -4,3 +4,7 @@ values:
     value: Bamako
     enabled: true
     description: The name of the village to search for in the GeoNames API. Change this value to test different village searches in Africa.
+  - key: BRAVE_SEARCH_API_KEY
+    value: BSANVQdxSNUHY0UB8-cShRuqtRNRo8S
+    enabled: true
+    type: default

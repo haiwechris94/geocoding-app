@@ -335,19 +335,71 @@ const searchHDX = async (query, filters = {}) => {
  * @returns {Promise<Array>} Array of results from all APIs
  */
 const geocodeWithAllAPIs = async (query, filters = {}) => {
+  const overpassService = require('./overpassService');
+  const wikidataService = require('./wikidataService');
+  const braveSearchService = require('./braveSearchService');
+  const { geoAgent } = require('./geoAgent');
+
+  // Extract village name and country from query/filters
+  const villageName = query.split(',')[0].trim();
+  const country = filters.country || filters.countryCode || '';
+
   const promises = [
     geocodeWithGoogle(query, filters),
     geocodeWithGeoNames(query, filters),
     geocodeWithNominatim(query, filters),
     geocodeWithPhoton(query, filters),
-    geocodeWithOpenCage(query, filters)
+    geocodeWithOpenCage(query, filters),
+    // New sources
+    overpassService.searchVillageGlobal(villageName, filters.countryCode || null)
+      .then(results => results.map(r => ({
+        source: r.source,
+        sourceFR: r.source,
+        latitude: r.latitude,
+        longitude: r.longitude,
+        formattedAddress: r.label || r.villageName,
+        country: r.country,
+        region: r.region,
+        reliability: 0.88,
+        raw: r
+      }))).catch(() => []),
+    wikidataService.geocodeVillage(villageName, country)
+      .then(results => results.map(r => ({
+        source: r.source,
+        sourceFR: r.source,
+        latitude: r.latitude,
+        longitude: r.longitude,
+        formattedAddress: r.label || r.villageName,
+        country: r.country,
+        reliability: 0.90,
+        raw: r
+      }))).catch(() => []),
+    braveSearchService.searchVillage(villageName, country)
+      .then(results => results.map(r => ({
+        source: r.source,
+        sourceFR: r.source,
+        latitude: r.latitude,
+        longitude: r.longitude,
+        formattedAddress: r.label || r.villageName,
+        reliability: 0.65,
+        raw: r
+      }))).catch(() => []),
   ];
 
-  const results = await Promise.allSettled(promises);
+  const settled = await Promise.allSettled(promises);
   
-  return results
-    .filter(r => r.status === 'fulfilled' && r.value !== null)
-    .map(r => r.value);
+  // Flatten results (some sources return arrays, others single objects)
+  const allResults = [];
+  for (const r of settled) {
+    if (r.status === 'fulfilled' && r.value !== null) {
+      if (Array.isArray(r.value)) {
+        allResults.push(...r.value.filter(Boolean));
+      } else {
+        allResults.push(r.value);
+      }
+    }
+  }
+  return allResults;
 };
 
 // ===========================================

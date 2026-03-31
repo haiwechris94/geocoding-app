@@ -132,3 +132,180 @@
     padding: 8px;
   }
 }
+
+/* ── Sources Panel ─────────────────────────────────────────── */
+.sources-panel {
+  margin-bottom: 1.5rem;
+  padding: 1.5rem;
+}
+
+.sources-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+  color: var(--text-primary, #1a1a2e);
+}
+
+.sources-subtitle {
+  font-size: 0.85rem;
+  color: var(--text-secondary, #666);
+  margin-bottom: 1rem;
+}
+
+.sources-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.source-badge {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.75rem;
+  border-radius: 10px;
+  border: 1.5px solid transparent;
+  transition: all 0.2s;
+}
+
+.source-active {
+  background: #f0fdf4;
+  border-color: #86efac;
+}
+
+.source-inactive {
+  background: #f9fafb;
+  border-color: #e5e7eb;
+  opacity: 0.65;
+}
+
+.source-icon {
+  font-size: 1.4rem;
+  flex-shrink: 0;
+}
+
+.source-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.source-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #1a1a2e;
+}
+
+.source-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.source-status,
+.source-type,
+.source-reliability {
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+}
+
+.status-on {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.status-off {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.source-type {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.source-reliability {
+  background: #fef9c3;
+  color: #854d0e;
+}
+
+/* ── GeoAgent Toggle ───────────────────────────────────────── */
+.geoagent-toggle {
+  background: linear-gradient(135deg, #ede9fe, #dbeafe);
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  border: 1.5px solid #c4b5fd;
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  cursor: pointer;
+}
+
+.toggle-checkbox {
+  width: 18px;
+  height: 18px;
+  accent-color: #7c3aed;
+  cursor: pointer;
+}
+
+.toggle-text {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #4c1d95;
+}
+
+.toggle-desc {
+  font-size: 0.8rem;
+  color: #6d28d9;
+  margin-top: 0.4rem;
+  margin-left: 1.6rem;
+}
+
+/* ── Live Stats ────────────────────────────────────────────── */
+.live-stats {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 1rem 1.5rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.live-stat {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.stat-icon {
+  font-size: 1.1rem;
+}
+
+.stat-value {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #1a1a2e;
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  color: #666;
+}
+
+.current-village {
+  margin-left: auto;
+  font-size: 0.85rem;
+  color: #555;
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.current-village strong {
+  color: #7c3aed;
+}

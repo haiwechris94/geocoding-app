@@ -132,6 +132,33 @@ router.get('/sources/status', async (req, res) => {
         available: apiConfig.hdx.enabled,
         reliability: apiConfig.hdx.reliability,
         rateLimit: apiConfig.hdx.rateLimit
+      },
+      overpass: {
+        enabled: true,
+        available: true,
+        reliability: 0.88,
+        rateLimit: { requestsPerMinute: 10 },
+        description: 'OpenStreetMap Overpass API (gratuit)'
+      },
+      wikidata: {
+        enabled: true,
+        available: true,
+        reliability: 0.90,
+        rateLimit: { requestsPerSecond: 5 },
+        description: 'Wikidata / Wikipedia (gratuit)'
+      },
+      braveSearch: {
+        enabled: !!process.env.BRAVE_SEARCH_API_KEY,
+        available: !!process.env.BRAVE_SEARCH_API_KEY,
+        reliability: 0.65,
+        rateLimit: { requestsPerMonth: 2000 },
+        description: 'Brave Search API'
+      },
+      geoAgent: {
+        enabled: true,
+        available: true,
+        reliability: 0.95,
+        description: 'GeoAgent IA (agrégateur multi-sources + DeepSeek)'
       }
     };
 

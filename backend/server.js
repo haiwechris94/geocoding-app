@@ -202,6 +202,37 @@ app.get('/api/sources/status', (req, res) => {
           en: 'API key not configured (DEEPSEEK_API_KEY)',
           fr: 'Clé API non configurée (DEEPSEEK_API_KEY)'
         }
+      },
+      {
+        id: 'overpass',
+        name: 'Overpass (OpenStreetMap Avancé)',
+        reliability: 0.88,
+        operational: true,
+        reason: null
+      },
+      {
+        id: 'wikidata',
+        name: 'Wikidata / Wikipedia',
+        reliability: 0.90,
+        operational: true,
+        reason: null
+      },
+      {
+        id: 'braveSearch',
+        name: 'Brave Search',
+        reliability: 0.65,
+        operational: !!process.env.BRAVE_SEARCH_API_KEY,
+        reason: process.env.BRAVE_SEARCH_API_KEY ? null : {
+          en: 'API key not configured (BRAVE_SEARCH_API_KEY)',
+          fr: 'Clé API non configurée (BRAVE_SEARCH_API_KEY)'
+        }
+      },
+      {
+        id: 'geoAgent',
+        name: 'GeoAgent IA',
+        reliability: 0.95,
+        operational: true,
+        reason: null
       }
     ];
 

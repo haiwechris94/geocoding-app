@@ -76,7 +76,7 @@ const GeoAgent = () => {
   const texts = {
     en: {
       title: 'GeoAgent',
-      subtitle: 'AI-Powered Village Geocoding',
+      subtitle: 'Multi-Source AI Geocoding (Nominatim + GeoNames + OpenCage + Overpass + Wikidata + Brave + DeepSeek)',
       villageLabel: 'Village Name',
       villagePlaceholder: 'Enter village name...',
       countryLabel: 'Country (optional)',
@@ -99,7 +99,7 @@ const GeoAgent = () => {
     },
     fr: {
       title: 'GeoAgent',
-      subtitle: 'Géocodage de Villages par IA',
+      subtitle: 'Géocodage Multi-Sources IA (Nominatim + GeoNames + OpenCage + Overpass + Wikidata + Brave + DeepSeek)',
       villageLabel: 'Nom du Village',
       villagePlaceholder: 'Entrez le nom du village...',
       countryLabel: 'Pays (optionnel)',

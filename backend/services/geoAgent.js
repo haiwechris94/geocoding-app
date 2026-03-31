@@ -1,255 +1,286 @@
 /**
- * GeoAgent — Multi-Source Geocoding Agent + Similar Name Suggestions
- * Place this file at: /backend/services/geoAgent.js
+ * GeoAgent Enhanced — Multi-Source Village Geocoder
+ * Intègre : Nominatim, GeoNames, OpenCage, Google Maps,
+ *            Overpass (OSM), Wikidata, Brave Search
+ * 
+ * Utilise Levenshtein pour corriger les fautes de frappe
+ * L'IA (DeepSeek) choisit le meilleur résultat final
  */
 
-const axios = require("axios");
+const axios = require('axios');
 
-// ─────────────────────────────────────────────
-// SOURCE 1 — OpenCage
-// ─────────────────────────────────────────────
-async function queryOpenCage(query, limit = 1) {
+// ── Import new services ────────────────────────────────────────────────────
+const overpassService   = require('./overpassService');
+const wikidataService   = require('./wikidataService');
+const braveSearchService = require('./braveSearchService');
+
+// ── Levenshtein distance (already installed) ───────────────────────────────
+let levenshtein;
+try { levenshtein = require('fast-levenshtein'); } catch (e) {}
+
+const similarity = (a, b) => {
+  if (!levenshtein) return 1;
+  const dist = levenshtein.get(a.toLowerCase(), b.toLowerCase());
+  const maxLen = Math.max(a.length, b.length);
+  return maxLen === 0 ? 1 : 1 - dist / maxLen;
+};
+
+// ── Haversine ──────────────────────────────────────────────────────────────
+const haversine = (lat1, lng1, lat2, lng2) => {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a = Math.sin(dLat/2)**2 +
+    Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+};
+
+// ── Nominatim ──────────────────────────────────────────────────────────────
+const searchNominatim = async (villageName, country) => {
   try {
-    const res = await axios.get("https://api.opencagedata.com/geocode/v1/json", {
-      params: {
-        key: process.env.OPENCAGE_API_KEY,
-        q: query,
-        limit,
-        no_annotations: 1,
-      },
-      timeout: 6000,
+    const resp = await axios.get('https://nominatim.openstreetmap.org/search', {
+      params: { q: `${villageName}${country ? ', ' + country : ''}`, format: 'json', limit: 3, addressdetails: 1 },
+      headers: { 'User-Agent': 'VillagePointApp/1.0 contact@villagepoint.app' },
+      timeout: 10000,
+    });
+    return (resp.data || []).map(r => ({
+      villageName: r.display_name.split(',')[0],
+      found: true,
+      latitude: parseFloat(r.lat),
+      longitude: parseFloat(r.lon),
+      source: 'Nominatim',
+      label: r.display_name,
+      confidence: parseFloat(r.importance || 0.5),
+      reliability: 'medium',
+    }));
+  } catch (e) {
+    console.warn('[Nominatim] error:', e.message);
+    return [];
+  }
+};
+
+// ── GeoNames ───────────────────────────────────────────────────────────────
+const searchGeoNames = async (villageName, country) => {
+  const username = process.env.GEONAMES_USERNAME;
+  if (!username) return [];
+  try {
+    const resp = await axios.get('http://api.geonames.org/searchJSON', {
+      params: { q: villageName, country: country || '', maxRows: 3, username, featureClass: 'P' },
+      timeout: 10000,
+    });
+    return (resp.data?.geonames || []).map(r => ({
+      villageName: r.name,
+      found: true,
+      latitude: parseFloat(r.lat),
+      longitude: parseFloat(r.lng),
+      source: 'GeoNames',
+      country: r.countryName,
+      region: r.adminName1,
+      population: r.population || null,
+      label: `${r.name}, ${r.adminName1}, ${r.countryName}`,
+      confidence: 0.80,
+      reliability: 'medium',
+    }));
+  } catch (e) {
+    console.warn('[GeoNames] error:', e.message);
+    return [];
+  }
+};
+
+// ── OpenCage ───────────────────────────────────────────────────────────────
+const searchOpenCage = async (villageName, country) => {
+  const key = process.env.OPENCAGE_API_KEY;
+  if (!key) return [];
+  try {
+    const resp = await axios.get('https://api.opencagedata.com/geocode/v1/json', {
+      params: { q: `${villageName}${country ? ', ' + country : ''}`, key, limit: 3, no_annotations: 1 },
+      timeout: 10000,
+    });
+    return (resp.data?.results || []).map(r => ({
+      villageName: r.components.village || r.components.town || r.components.city || villageName,
+      found: true,
+      latitude: r.geometry.lat,
+      longitude: r.geometry.lng,
+      source: 'OpenCage',
+      country: r.components.country,
+      region: r.components.state,
+      label: r.formatted,
+      confidence: r.confidence / 10,
+      reliability: r.confidence >= 7 ? 'high' : 'medium',
+    }));
+  } catch (e) {
+    console.warn('[OpenCage] error:', e.message);
+    return [];
+  }
+};
+
+// ── Photon ─────────────────────────────────────────────────────────────────
+const searchPhoton = async (villageName, country) => {
+  try {
+    const resp = await axios.get('https://photon.komoot.io/api/', {
+      params: { q: `${villageName}${country ? ', ' + country : ''}`, limit: 3 },
+      timeout: 10000,
+    });
+    return (resp.data?.features || []).map(f => {
+      const p = f.properties;
+      return {
+        villageName: p.name || villageName,
+        found: true,
+        latitude: f.geometry.coordinates[1],
+        longitude: f.geometry.coordinates[0],
+        source: 'Photon (Komoot)',
+        country: p.country,
+        region: p.state,
+        label: [p.name, p.city, p.country].filter(Boolean).join(', '),
+        confidence: 0.75,
+        reliability: 'medium',
+      };
+    });
+  } catch (e) {
+    console.warn('[Photon] error:', e.message);
+    return [];
+  }
+};
+
+// ── AI scoring via DeepSeek ────────────────────────────────────────────────
+const scoreWithAI = async (villageName, country, candidates) => {
+  const key = process.env.DEEPSEEK_API_KEY;
+  const baseUrl = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
+  if (!key || candidates.length === 0) return candidates[0] || null;
+
+  try {
+    const prompt = `You are a geocoding expert for African villages.
+Given the query: "${villageName}"${country ? ' in ' + country : ''}
+Choose the BEST matching result from these candidates. Return ONLY the index number (0, 1, 2...).
+
+Candidates:
+${candidates.map((c, i) => `${i}: ${c.villageName} (${c.latitude?.toFixed(4)}, ${c.longitude?.toFixed(4)}) source=${c.source} confidence=${c.confidence}`).join('\n')}
+
+Return only a single number.`;
+
+    const resp = await axios.post(`${baseUrl}/v1/chat/completions`, {
+      model: 'deepseek-chat',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 5,
+      temperature: 0,
+    }, {
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      timeout: 8000,
     });
 
-    if (res.data.results && res.data.results.length > 0) {
-      return res.data.results.map((r) => ({
-        source: "OpenCage",
-        lat: r.geometry.lat,
-        lng: r.geometry.lng,
-        confidence: r.confidence / 10,
-        formatted: r.formatted,
-      }));
+    const idx = parseInt(resp.data?.choices?.[0]?.message?.content?.trim());
+    if (!isNaN(idx) && candidates[idx]) {
+      return { ...candidates[idx], aiSelected: true };
     }
   } catch (e) {
-    console.warn("[GeoAgent] OpenCage error:", e.message);
+    console.warn('[AI Scoring] error:', e.message);
   }
-  return [];
-}
+  return candidates[0];
+};
 
-// ─────────────────────────────────────────────
-// SOURCE 2 — Nominatim (OpenStreetMap)
-// ─────────────────────────────────────────────
-async function queryNominatim(query, limit = 1) {
-  try {
-    const res = await axios.get("https://nominatim.openstreetmap.org/search", {
-      params: {
-        q: query,
-        format: "json",
-        limit,
-        addressdetails: 1,
-      },
-      headers: {
-        "User-Agent": `VillagePoint-GeoAgent/1.0 (${process.env.NOMINATIM_EMAIL})`,
-      },
-      timeout: 6000,
-    });
+// ── Main GeoAgent function ─────────────────────────────────────────────────
+const geoAgent = async (villageName, country = '') => {
+  console.log(`[GeoAgent] Searching: "${villageName}" country="${country}"`);
 
-    if (res.data && res.data.length > 0) {
-      return res.data.map((r) => ({
-        source: "Nominatim (OSM)",
-        lat: parseFloat(r.lat),
-        lng: parseFloat(r.lon),
-        confidence: Math.min(parseFloat(r.importance) || 0.5, 1),
-        formatted: r.display_name,
-      }));
-    }
-  } catch (e) {
-    console.warn("[GeoAgent] Nominatim error:", e.message);
-  }
-  return [];
-}
-
-// ─────────────────────────────────────────────
-// SOURCE 3 — GeoNames
-// ─────────────────────────────────────────────
-async function queryGeoNames(query, limit = 1) {
-  try {
-    const username = process.env.GEONAMES_USERNAME;
-    if (!username || username === "your_geonames_username_here") return [];
-
-    const res = await axios.get("http://api.geonames.org/searchJSON", {
-      params: {
-        q: query,
-        maxRows: limit,
-        username,
-        type: "json",
-      },
-      timeout: 6000,
-    });
-
-    if (res.data.geonames && res.data.geonames.length > 0) {
-      return res.data.geonames.map((r) => ({
-        source: "GeoNames",
-        lat: parseFloat(r.lat),
-        lng: parseFloat(r.lng),
-        confidence: 0.6,
-        formatted: [r.name, r.adminName1, r.countryName].filter(Boolean).join(", "),
-        name: r.name,
-      }));
-    }
-  } catch (e) {
-    console.warn("[GeoAgent] GeoNames error:", e.message);
-  }
-  return [];
-}
-
-// ─────────────────────────────────────────────
-// SCORING — Score de fiabilité global
-// ─────────────────────────────────────────────
-function computeReliabilityScore(results) {
-  if (results.length === 0) return 0;
-  if (results.length === 1) return results[0].confidence * 0.7;
-
-  const lats = results.map((r) => r.lat);
-  const lngs = results.map((r) => r.lng);
-  const latSpread = Math.max(...lats) - Math.min(...lats);
-  const lngSpread = Math.max(...lngs) - Math.min(...lngs);
-
-  // Bonus si les sources sont géographiquement cohérentes (< ~11km)
-  const coherenceBonus = latSpread < 0.1 && lngSpread < 0.1 ? 0.2 : 0;
-  const avgConf = results.reduce((s, r) => s + r.confidence, 0) / results.length;
-  const sourceBonus = results.length >= 2 ? 0.1 : 0;
-
-  return Math.min(avgConf + coherenceBonus + sourceBonus, 1);
-}
-
-// ─────────────────────────────────────────────
-// AGENT PRINCIPAL — Géocodage
-// ─────────────────────────────────────────────
-async function geoAgent(village, country) {
-  const query = `${village}, ${country}`;
-  console.log(`[GeoAgent] Geocoding: "${query}"`);
-
-  const [opencageRes, nominatimRes, geonamesRes] = await Promise.all([
-    queryOpenCage(query, 1),
-    queryNominatim(query, 1),
-    queryGeoNames(query, 1),
+  // Run all sources in parallel
+  const [
+    nominatimResults,
+    geonamesResults,
+    opencageResults,
+    photonResults,
+    overpassResults,
+    wikidataResults,
+    braveResults,
+  ] = await Promise.allSettled([
+    searchNominatim(villageName, country),
+    searchGeoNames(villageName, country),
+    searchOpenCage(villageName, country),
+    searchPhoton(villageName, country),
+    overpassService.searchVillageGlobal(villageName, null),
+    wikidataService.geocodeVillage(villageName, country),
+    braveSearchService.searchVillage(villageName, country),
   ]);
 
-  const validResults = [...opencageRes, ...nominatimRes, ...geonamesRes].filter(Boolean);
+  // Collect all successful results
+  const allCandidates = [
+    ...(nominatimResults.status === 'fulfilled' ? nominatimResults.value : []),
+    ...(geonamesResults.status  === 'fulfilled' ? geonamesResults.value  : []),
+    ...(opencageResults.status  === 'fulfilled' ? opencageResults.value  : []),
+    ...(photonResults.status    === 'fulfilled' ? photonResults.value    : []),
+    ...(overpassResults.status  === 'fulfilled' ? overpassResults.value  : []),
+    ...(wikidataResults.status  === 'fulfilled' ? wikidataResults.value  : []),
+    ...(braveResults.status     === 'fulfilled' ? braveResults.value     : []),
+  ].filter(r => r && r.latitude && r.longitude);
 
-  if (validResults.length === 0) {
+  console.log(`[GeoAgent] Total candidates: ${allCandidates.length}`);
+
+  if (allCandidates.length === 0) {
+    return { found: false, villageName, error: 'No results from any source' };
+  }
+
+  // Score by name similarity + source weight
+  const scored = allCandidates.map(c => {
+    const nameSim = similarity(villageName, c.villageName || '');
+    const sourceWeight = {
+      'Wikidata': 1.0, 'Wikidata (SPARQL)': 1.0,
+      'GeoNames': 0.95, 'OpenCage': 0.92,
+      'Overpass (OpenStreetMap)': 0.90,
+      'Nominatim': 0.88, 'Photon (Komoot)': 0.82,
+      'Brave Web Search': 0.60,
+    }[c.source] || 0.7;
+
     return {
-      query,
-      success: false,
-      message: {
-        en: "No coordinates found for this location.",
-        fr: "Aucune coordonnée trouvée pour cet emplacement.",
-      },
+      ...c,
+      score: (nameSim * 0.5) + ((c.confidence || 0.7) * 0.3) + (sourceWeight * 0.2),
     };
-  }
-
-  const sorted = validResults.sort((a, b) => b.confidence - a.confidence);
-  const best = sorted[0];
-  const reliabilityScore = computeReliabilityScore(validResults);
-  const reliabilityLabel =
-    reliabilityScore >= 0.8 ? "High" : reliabilityScore >= 0.5 ? "Medium" : "Low";
-
-  console.log(`[GeoAgent] Found ${validResults.length} result(s). Best: ${best.source}`);
-
-  return {
-    query,
-    success: true,
-    best: {
-      lat: best.lat,
-      lng: best.lng,
-      source: best.source,
-      formatted: best.formatted,
-      confidence: parseFloat(best.confidence.toFixed(2)),
-    },
-    reliability: {
-      score: parseFloat(reliabilityScore.toFixed(2)),
-      label: reliabilityLabel,
-      sourcesFound: validResults.length,
-    },
-    alternatives: sorted.map((r) => ({
-      source: r.source,
-      lat: r.lat,
-      lng: r.lng,
-      confidence: parseFloat(r.confidence.toFixed(2)),
-      formatted: r.formatted,
-    })),
-  };
-}
-
-// ─────────────────────────────────────────────
-// SUGGESTIONS — Noms de villages similaires
-// ─────────────────────────────────────────────
-async function suggestSimilarVillages(village, country) {
-  const query = `${village}, ${country}`;
-  console.log(`[GeoAgent] Suggesting similar names for: "${query}"`);
-
-  const [opencageRes, nominatimRes, geonamesRes] = await Promise.all([
-    queryOpenCage(query, 5),
-    queryNominatim(query, 5),
-    queryGeoNames(village, 5), // GeoNames : recherche sur le nom seul pour plus de variété
-  ]);
-
-  const all = [...opencageRes, ...nominatimRes, ...geonamesRes];
-
-  if (all.length === 0) {
-    return {
-      query,
-      success: false,
-      suggestions: [],
-      message: {
-        en: "No similar villages found.",
-        fr: "Aucun village similaire trouvé.",
-      },
-    };
-  }
-
-  // Extraire le nom court depuis le formatted (avant la première virgule)
-  const extractName = (formatted) => {
-    if (!formatted) return "";
-    return formatted.split(",")[0].trim();
-  };
-
-  // Dédupliquer par nom court (insensible à la casse)
-  const seen = new Set();
-  const suggestions = [];
-
-  for (const r of all) {
-    const name = extractName(r.formatted);
-    const key = name.toLowerCase();
-    if (!name || seen.has(key)) continue;
-    seen.add(key);
-
-    suggestions.push({
-      name,
-      formatted: r.formatted,
-      lat: r.lat,
-      lng: r.lng,
-      source: r.source,
-      confidence: parseFloat(r.confidence.toFixed(2)),
-    });
-  }
-
-  // Trier : priorité aux noms commençant par les mêmes lettres que la saisie
-  const inputLower = village.toLowerCase();
-  suggestions.sort((a, b) => {
-    const aStarts = a.name.toLowerCase().startsWith(inputLower.slice(0, 3)) ? 1 : 0;
-    const bStarts = b.name.toLowerCase().startsWith(inputLower.slice(0, 3)) ? 1 : 0;
-    if (bStarts !== aStarts) return bStarts - aStarts;
-    return b.confidence - a.confidence;
   });
 
+  scored.sort((a, b) => b.score - a.score);
+
+  // Deduplicate: group within 1km of each other
+  const deduplicated = [];
+  for (const cand of scored) {
+    const isDup = deduplicated.some(existing =>
+      haversine(existing.latitude, existing.longitude, cand.latitude, cand.longitude) < 1
+    );
+    if (!isDup) deduplicated.push(cand);
+  }
+
+  // Let AI pick the best from top candidates
+  const best = await scoreWithAI(villageName, country, deduplicated.slice(0, 5));
+
   return {
-    query,
-    success: true,
-    inputVillage: village,
-    country,
-    suggestions: suggestions.slice(0, 8), // Max 8 propositions
+    ...best,
+    found: true,
+    alternatives: deduplicated.slice(0, 5),
+    totalSources: allCandidates.length,
   };
-}
+};
+
+// ── Similar village suggestions ────────────────────────────────────────────
+const suggestSimilarVillages = async (villageName, country = '') => {
+  try {
+    const [nominatim, overpass, wikidata] = await Promise.allSettled([
+      searchNominatim(villageName, country),
+      overpassService.searchVillageGlobal(villageName, null),
+      wikidataService.searchVillage(villageName, country),
+    ]);
+
+    const all = [
+      ...(nominatim.status === 'fulfilled' ? nominatim.value : []),
+      ...(overpass.status  === 'fulfilled' ? overpass.value  : []),
+      ...(wikidata.status  === 'fulfilled' ? wikidata.value  : []),
+    ];
+
+    const suggestions = [...new Set(
+      all.map(r => r.villageName).filter(n => n && n.toLowerCase() !== villageName.toLowerCase())
+    )].slice(0, 10);
+
+    return suggestions;
+  } catch (e) {
+    console.error('[GeoAgent] suggestSimilarVillages error:', e.message);
+    return [];
+  }
+};
 
 module.exports = { geoAgent, suggestSimilarVillages };

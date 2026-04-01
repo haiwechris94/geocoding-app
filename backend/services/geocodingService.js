@@ -346,28 +346,52 @@ const geocodeSingleVillage = async (villageName, filters = {}) => {
   let searchQuery = villageName;
   
   // Add geographic context to improve accuracy
-  if (filters.arrondissement) {
-    searchQuery += `, ${filters.arrondissement}`;
-  }
-  if (filters.department) {
-    searchQuery += `, ${filters.department}`;
-  }
-  if (filters.region) {
-    searchQuery += `, ${filters.region}`;
-  }
-  if (filters.country) {
-    searchQuery += `, ${filters.country}`;
-  }
+  if (filters.arrondissement) searchQuery += `, ${filters.arrondissement}`;
+  if (filters.department)     searchQuery += `, ${filters.department}`;
+  if (filters.region)         searchQuery += `, ${filters.region}`;
+  if (filters.country)        searchQuery += `, ${filters.country}`;
 
-  // Get results from all APIs
+  // Get results from all APIs (including LocationIQ)
   let results = await geocodeWithAllAPIs(searchQuery, filters);
+
+  // ── LocationIQ ─────────────────────────────────────────────────────────
+  const locationIQKey = process.env.LOCATIONIQ_API_KEY;
+  if (locationIQKey) {
+    try {
+      const liqResp = await require('axios').get('https://us1.locationiq.com/v1/search', {
+        params: {
+          key: locationIQKey,
+          q: searchQuery,
+          format: 'json',
+          limit: 3,
+          addressdetails: 1,
+          countrycodes: filters.countryCode || undefined,
+        },
+        timeout: 10000,
+      });
+      const liqResults = (liqResp.data || []).map(r => ({
+        source: 'LocationIQ',
+        sourceFR: 'LocationIQ',
+        latitude: parseFloat(r.lat),
+        longitude: parseFloat(r.lon),
+        formattedAddress: r.display_name,
+        country: r.address?.country,
+        adminLevel1: r.address?.state,
+        adminLevel2: r.address?.county,
+        adminLevel3: r.address?.suburb || r.address?.village,
+        reliability: 0.82,
+      }));
+      results.push(...liqResults);
+    } catch (liqErr) {
+      console.warn('[LocationIQ] error:', liqErr.message);
+    }
+  }
 
   // Enrich with GeoAgent (multi-source + AI scoring)
   try {
     const { geoAgent } = require('./geoAgent');
     const agentResult = await geoAgent(villageName, filters.country || filters.countryCode || '');
     if (agentResult && agentResult.found && agentResult.latitude && agentResult.longitude) {
-      // Add geoAgent best result as a high-priority candidate
       results.unshift({
         source: agentResult.source || 'GeoAgent (AI)',
         sourceFR: agentResult.source || 'GeoAgent (IA)',
@@ -386,30 +410,69 @@ const geocodeSingleVillage = async (villageName, filters = {}) => {
     console.warn('[GeocodingService] GeoAgent enrichment failed:', agentErr.message);
   }
 
-  // Filter results by radius if center coordinates and radius are provided
+  // ── Geographic boundary filtering ──────────────────────────────────────
+  // 1. Filter by radius if center + radius provided
   if (filters.centerLat && filters.centerLng && filters.radius) {
     const centerLat = parseFloat(filters.centerLat);
     const centerLng = parseFloat(filters.centerLng);
     const searchRadius = parseFloat(filters.radius);
-    
     if (!isNaN(centerLat) && !isNaN(centerLng) && !isNaN(searchRadius) && searchRadius > 0) {
-      console.log(`[Geocoding] Filtering results by radius: ${searchRadius}km from center (${centerLat}, ${centerLng})`);
-      
-      results = results.filter(result => {
-        const distance = calculateDistance(
-          centerLat, centerLng,
-          result.latitude, result.longitude
-        );
-        const withinRadius = distance <= searchRadius;
-        
-        if (!withinRadius) {
-          console.log(`[Geocoding] Filtered out: ${result.formattedAddress} - distance: ${distance.toFixed(2)}km > ${searchRadius}km`);
-        }
-        
-        return withinRadius;
+      console.log(`[Geocoding] Filtering by radius: ${searchRadius}km`);
+      results = results.filter(r => {
+        const dist = calculateDistance(centerLat, centerLng, r.latitude, r.longitude);
+        return dist <= searchRadius;
       });
-      
-      console.log(`[Geocoding] After radius filtering: ${results.length} results within ${searchRadius}km`);
+      console.log(`[Geocoding] After radius filter: ${results.length} results`);
+    }
+  }
+
+  // 2. Filter by admin boundaries (region / department / arrondissement)
+  //    We do a soft match: if the result's admin fields contain the filter value
+  const normalizeStr = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+
+  if (filters.region) {
+    const filterRegion = normalizeStr(filters.region);
+    const filtered = results.filter(r => {
+      const addr = normalizeStr(r.formattedAddress || '');
+      const admin1 = normalizeStr(r.adminLevel1 || r.region || '');
+      return addr.includes(filterRegion) || admin1.includes(filterRegion) || filterRegion.includes(admin1);
+    });
+    // Only apply if it reduces results (don't discard everything)
+    if (filtered.length > 0) {
+      results = filtered;
+      console.log(`[Geocoding] After region filter "${filters.region}": ${results.length} results`);
+    } else {
+      console.warn(`[Geocoding] Region filter "${filters.region}" excluded all results — keeping all`);
+    }
+  }
+
+  if (filters.department) {
+    const filterDept = normalizeStr(filters.department);
+    const filtered = results.filter(r => {
+      const addr = normalizeStr(r.formattedAddress || '');
+      const admin2 = normalizeStr(r.adminLevel2 || r.department || '');
+      return addr.includes(filterDept) || admin2.includes(filterDept) || filterDept.includes(admin2);
+    });
+    if (filtered.length > 0) {
+      results = filtered;
+      console.log(`[Geocoding] After department filter "${filters.department}": ${results.length} results`);
+    } else {
+      console.warn(`[Geocoding] Department filter "${filters.department}" excluded all results — keeping all`);
+    }
+  }
+
+  if (filters.arrondissement) {
+    const filterArr = normalizeStr(filters.arrondissement);
+    const filtered = results.filter(r => {
+      const addr = normalizeStr(r.formattedAddress || '');
+      const admin3 = normalizeStr(r.adminLevel3 || r.arrondissement || '');
+      return addr.includes(filterArr) || admin3.includes(filterArr) || filterArr.includes(admin3);
+    });
+    if (filtered.length > 0) {
+      results = filtered;
+      console.log(`[Geocoding] After arrondissement filter "${filters.arrondissement}": ${results.length} results`);
+    } else {
+      console.warn(`[Geocoding] Arrondissement filter "${filters.arrondissement}" excluded all results — keeping all`);
     }
   }
 

@@ -10,6 +10,7 @@
  */
 
 const levenshtein = require('fast-levenshtein');
+const fuzzyMatchService = require('./fuzzyMatchService');
 const { geocodeWithAllAPIs, reverseGeocode } = require('./apiClients');
 const { confidenceWeights, geocodingSettings } = require('../config/apiConfig');
 const { getCountryByCode } = require('../config/countries');
@@ -25,16 +26,9 @@ const { calculateBorderProximity } = require('./proximityService');
  */
 const calculateNameSimilarity = (str1, str2) => {
   if (!str1 || !str2) return 0;
-  
-  const s1 = str1.toLowerCase().trim();
-  const s2 = str2.toLowerCase().trim();
-  
-  if (s1 === s2) return 1;
-  
-  const distance = levenshtein.get(s1, s2);
-  const maxLength = Math.max(s1.length, s2.length);
-  
-  return 1 - (distance / maxLength);
+
+  // Use combined Double Metaphone + Levenshtein score (Option 4)
+  return fuzzyMatchService.combinedSimilarity(str1, str2);
 };
 
 /**
@@ -596,7 +590,7 @@ const fuzzyMatchVillage = async (villageName, filters) => {
       const bestResult = results[0];
       const similarity = calculateNameSimilarity(villageName, extractVillageName(bestResult.formattedAddress));
       
-      if (similarity >= 0.7) { // At least 70% similar
+      if (similarity >= 0.55) { // At least 55% similar (Option 4: lowered threshold)
         return {
           villageName,
           found: true,

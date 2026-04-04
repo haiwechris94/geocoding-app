@@ -105,7 +105,32 @@ const BatchGeocode = () => {
               }
             }
           } catch (e) {
-            notFound++;
+            if (e.isTimeout || (e.code === 'ECONNABORTED') || (e.message && e.message.includes('timeout'))) {
+              // Retry once after a short delay on timeout
+              try {
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                const retryResp = await geocodingAPI.geocodeSingle(villages[i], enrichedFilters);
+                if (retryResp.success && retryResp.data) {
+                  partialResults.push(retryResp.data);
+                  if (retryResp.data.found) {
+                    found++;
+                    if ((retryResp.data.confidence || 0) < 0.7) lowConf++;
+                  } else {
+                    notFound++;
+                  }
+                } else {
+                  notFound++;
+                }
+              } catch (retryErr) {
+                notFound++;
+              }
+            } else {
+              notFound++;
+            }
+          }
+          // Small delay between requests to avoid overwhelming the backend
+          if (i < total - 1) {
+            await new Promise(resolve => setTimeout(resolve, 300));
           }
           setLiveStats({ found, notFound, lowConf });
         }

@@ -22,7 +22,13 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    console.error('API Error:', error);
+    if (error.code === 'ECONNABORTED' || (error.message && error.message.includes('timeout'))) {
+      console.error('API Timeout Error:', error.message);
+      error.isTimeout = true;
+      error.userMessage = 'The geocoding request timed out. The server may be processing a large batch or external APIs are slow. Please try again.';
+    } else {
+      console.error('API Error:', error);
+    }
     return Promise.reject(error);
   }
 );
@@ -49,7 +55,7 @@ export const geocodingAPI = {
       filePath,
       columnName,
       filters
-    });
+    }, { timeout: 120000 });
     return response.data;
   },
 
@@ -58,16 +64,13 @@ export const geocodingAPI = {
     const response = await api.post('/geocoding/batch-manual', {
       villages,
       filters
-    });
+    }, { timeout: 120000 });
     return response.data;
   },
 
   // Single village geocode
   geocodeSingle: async (villageName, filters) => {
-    const response = await api.post('/geocoding/single', {
-      villageName,
-      filters
-    });
+    const response = await api.post('/geocoding/single', { villageName, filters }, { timeout: 120000 });
     return response.data;
   },
 

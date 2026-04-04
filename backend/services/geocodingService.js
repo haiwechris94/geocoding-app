@@ -90,11 +90,22 @@ const calculateConfidenceScore = (result, originalQuery, filters, allResults, in
   // 3. Geographic proximity score
   let proximityScore = 0.5;
   let proximityExplanation = {
-    en: 'No country filter applied - using neutral proximity score',
-    fr: 'Aucun filtre de pays appliqué - score de proximité neutre'
+    en: 'No reference location applied - using neutral proximity score',
+    fr: 'Aucune localisation de référence - score de proximité neutre'
   };
-  
-  if (filters.countryCode) {
+
+  // Priority: reference city > country center
+  if (filters.refCityLat && filters.refCityLng) {
+    const refLocation = { lat: parseFloat(filters.refCityLat), lng: parseFloat(filters.refCityLng) };
+    proximityScore = calculateProximityScore(result, refLocation);
+    const distanceKm = calculateDistance(result.latitude, result.longitude, refLocation.lat, refLocation.lng);
+    const cityName = filters.refCityName || filters.refCityDisplay || 'la ville de référence';
+    proximityScore = Math.max(0, 1 - (distanceKm / 500)); // max 500km for city-level
+    proximityExplanation = {
+      en: `Result is ${Math.round(distanceKm)}km from reference city "${cityName}". Proximity score: ${Math.round(proximityScore * 100)}%`,
+      fr: `Le résultat est à ${Math.round(distanceKm)}km de la ville de référence "${cityName}". Score de proximité: ${Math.round(proximityScore * 100)}%`
+    };
+  } else if (filters.countryCode) {
     const country = getCountryByCode(filters.countryCode);
     if (country) {
       proximityScore = calculateProximityScore(result, country.coordinates);
@@ -662,7 +673,23 @@ const generateNameVariations = (name) => {
   variations.push(baseName.replace(/î/g, 'i'));
   variations.push(baseName.replace(/ù/g, 'u'));
   variations.push(baseName.replace(/û/g, 'u'));
-  
+
+  // Phonetic variations
+  // y <-> i
+  variations.push(baseName.replace(/y/g, 'i'));
+  variations.push(baseName.replace(/i/g, 'y'));
+  // ou -> u and u -> ou
+  variations.push(baseName.replace(/ou/g, 'u'));
+  variations.push(baseName.replace(/(?<![aeiou])u(?![aeiou])/g, 'ou'));
+  // kh -> k
+  variations.push(baseName.replace(/kh/g, 'k'));
+  // ph -> f
+  variations.push(baseName.replace(/ph/g, 'f'));
+  // Double consonants -> single
+  variations.push(baseName.replace(/([bcdfghjklmnpqrstvwxz])\1+/g, '$1'));
+  // Remove intercalary h (e.g. Bahma -> Bama)
+  variations.push(baseName.replace(/(?<=[a-z])h(?=[a-z])/g, ''));
+
   // Remove duplicates
   return [...new Set(variations)];
 };

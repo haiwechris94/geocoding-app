@@ -3,8 +3,6 @@ import { Routes, Route } from 'react-router-dom';
 import Header from './components/Header';
 import Home from './pages/Home';
 import BatchGeocode from './pages/BatchGeocode';
-import AdvancedSearch from './pages/AdvancedSearch';
-import AdvancedSearchResults from './pages/AdvancedSearchResults';
 import Results from './pages/Results';
 import SearchHistory from './pages/SearchHistory';
 import ApiDocs from './pages/ApiDocs';
@@ -46,8 +44,6 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/batch" element={<BatchGeocode />} />
-          <Route path="/search" element={<AdvancedSearch />} />
-          <Route path="/advanced-search-results" element={<AdvancedSearchResults />} />
           <Route path="/results" element={<Results />} />
           <Route path="/history" element={<SearchHistory />} />
           <Route path="/api-docs" element={<ApiDocs />} />

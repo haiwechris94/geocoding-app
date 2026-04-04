@@ -1,0 +1,79 @@
+/* ── Reference City for proximity ─────────────────────────────────── */
+.ref-city-section {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-color);
+}
+
+.ref-city-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.ref-city-input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius);
+  font-size: 0.95rem;
+  font-family: inherit;
+  background: var(--surface);
+  color: var(--text-primary);
+  transition: var(--transition);
+}
+
+.ref-city-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px var(--primary-light);
+}
+
+.btn-ref-city {
+  padding: 10px 16px;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: var(--transition);
+}
+
+.btn-ref-city:hover:not(:disabled) {
+  background: var(--primary-dark);
+}
+
+.btn-ref-city:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-clear-ref {
+  padding: 8px 12px;
+  background: #fee2e2;
+  color: #dc2626;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.btn-clear-ref:hover {
+  background: #dc2626;
+  color: white;
+}
+
+.ref-city-confirmed {
+  margin-top: 8px;
+  font-size: 0.82rem;
+  color: #16a34a;
+  background: #dcfce7;
+  padding: 6px 12px;
+  border-radius: var(--radius);
+  border: 1px solid #bbf7d0;
+}

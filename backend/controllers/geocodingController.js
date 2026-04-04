@@ -118,6 +118,13 @@ const batchGeocodeFromFile = async (req, res) => {
 
     // Enrich filters with country name if code provided
     const enrichedFilters = { ...filterValidation.filters, language: lang };
+    
+    // Preserve reference city coordinates (not in validateFilters schema)
+    if (filters?.refCityLat)     enrichedFilters.refCityLat     = parseFloat(filters.refCityLat);
+    if (filters?.refCityLng)     enrichedFilters.refCityLng     = parseFloat(filters.refCityLng);
+    if (filters?.refCityName)    enrichedFilters.refCityName    = filters.refCityName;
+    if (filters?.refCityDisplay) enrichedFilters.refCityDisplay = filters.refCityDisplay;
+
     if (enrichedFilters.countryCode) {
       const country = getCountryByCode(enrichedFilters.countryCode);
       if (country) {
@@ -190,6 +197,10 @@ const batchGeocodeManual = async (req, res) => {
 
     // Enrich filters
     const enrichedFilters = { ...filterValidation.filters, language: lang };
+    if (filters?.refCityLat)     enrichedFilters.refCityLat     = parseFloat(filters.refCityLat);
+    if (filters?.refCityLng)     enrichedFilters.refCityLng     = parseFloat(filters.refCityLng);
+    if (filters?.refCityName)    enrichedFilters.refCityName    = filters.refCityName;
+    if (filters?.refCityDisplay) enrichedFilters.refCityDisplay = filters.refCityDisplay;
     if (enrichedFilters.countryCode) {
       const country = getCountryByCode(enrichedFilters.countryCode);
       if (country) {
@@ -256,6 +267,10 @@ const geocodeSingle = async (req, res) => {
 
     // Enrich filters
     const enrichedFilters = { ...filterValidation.filters, language: lang };
+    if (filters?.refCityLat)     enrichedFilters.refCityLat     = parseFloat(filters.refCityLat);
+    if (filters?.refCityLng)     enrichedFilters.refCityLng     = parseFloat(filters.refCityLng);
+    if (filters?.refCityName)    enrichedFilters.refCityName    = filters.refCityName;
+    if (filters?.refCityDisplay) enrichedFilters.refCityDisplay = filters.refCityDisplay;
     if (enrichedFilters.countryCode) {
       const country = getCountryByCode(enrichedFilters.countryCode);
       if (country) {

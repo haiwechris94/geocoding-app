@@ -179,8 +179,18 @@ Return only a single number.`;
 };
 
 // ── Main GeoAgent function ─────────────────────────────────────────────────
-const geoAgent = async (villageName, country = '') => {
+const geoAgent = async (villageName, country = '', filters = {}) => {
   console.log(`[GeoAgent] Searching: "${villageName}" country="${country}"`);
+
+  // Build location-biased query if refCity is set
+  const refLat = filters.refCityLat ? parseFloat(filters.refCityLat) : null;
+  const refLng = filters.refCityLng ? parseFloat(filters.refCityLng) : null;
+  const refCityName = filters.refCityName || '';
+
+  // Enrich query with ref city for better results
+  const locationQuery = refCityName
+    ? `${villageName}, near ${refCityName}, ${country}`
+    : villageName;
 
   // Run all sources in parallel
   const [
@@ -192,11 +202,13 @@ const geoAgent = async (villageName, country = '') => {
     wikidataResults,
     braveResults,
   ] = await Promise.allSettled([
-    searchNominatim(villageName, country),
+    searchNominatim(locationQuery, country),
     searchGeoNames(villageName, country),
-    searchOpenCage(villageName, country),
-    searchPhoton(villageName, country),
-    overpassService.searchVillageGlobal(villageName, null),
+    searchOpenCage(locationQuery, country),
+    searchPhoton(locationQuery, country),
+    refLat && refLng
+      ? overpassService.searchVillageInRadius(villageName, refLat, refLng, 100)
+      : overpassService.searchVillageGlobal(villageName, null),
     wikidataService.geocodeVillage(villageName, country),
     braveSearchService.searchVillage(villageName, country),
   ]);
@@ -218,7 +230,7 @@ const geoAgent = async (villageName, country = '') => {
     return { found: false, villageName, error: 'No results from any source' };
   }
 
-  // Score by name similarity + source weight
+  // Score by name similarity + source weight + refCity proximity boost
   const scored = allCandidates.map(c => {
     const nameSim = similarity(villageName, c.villageName || '');
     const sourceWeight = {
@@ -229,9 +241,16 @@ const geoAgent = async (villageName, country = '') => {
       'Brave Web Search': 0.60,
     }[c.source] || 0.7;
 
+    // Proximity boost: if refCity set, prefer results within 100km
+    let proximityBoost = 0;
+    if (refLat && refLng && c.latitude && c.longitude) {
+      const dist = haversine(refLat, refLng, c.latitude, c.longitude);
+      proximityBoost = dist <= 50 ? 0.3 : dist <= 100 ? 0.15 : dist <= 200 ? 0.05 : 0;
+    }
+
     return {
       ...c,
-      score: (nameSim * 0.5) + ((c.confidence || 0.7) * 0.3) + (sourceWeight * 0.2),
+      score: (nameSim * 0.45) + ((c.confidence || 0.7) * 0.25) + (sourceWeight * 0.15) + (proximityBoost * 0.15),
     };
   });
 

@@ -18,15 +18,20 @@ const ResultsTable = ({ results, onEditResult, onDeleteResult, onValidateNameSug
   const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
   const fetchComment = async (result, index) => {
-    if (loadingComments[index] || comments[index]) return;
+    if (loadingComments[index]) return;
     setLoadingComments(prev => ({ ...prev, [index]: true }));
+    setComments(prev => { const n = {...prev}; delete n[index]; return n; });
     try {
+      const country = result.country
+        || result.filters?.country
+        || result.formattedAddress?.split(',').pop()?.trim()
+        || '';
       const resp = await fetch(`${API_BASE}/geocoding/village-comment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept-Language': language },
         body: JSON.stringify({
           villageName: result.villageName,
-          country: result.country || result.filters?.country || result.formattedAddress?.split(',').slice(-1)[0]?.trim() || '',
+          country,
           latitude: result.latitude,
           longitude: result.longitude,
           lang: language,
@@ -39,6 +44,7 @@ const ResultsTable = ({ results, onEditResult, onDeleteResult, onValidateNameSug
         setComments(prev => ({ ...prev, [index]: '__error__' }));
       }
     } catch (e) {
+      console.error('[Comment] fetch error:', e);
       setComments(prev => ({ ...prev, [index]: '__error__' }));
     } finally {
       setLoadingComments(prev => ({ ...prev, [index]: false }));
@@ -513,25 +519,44 @@ const ResultsTable = ({ results, onEditResult, onDeleteResult, onValidateNameSug
                           <h4 className="ai-comment-title">
                             🤖 {language === 'fr' ? 'Commentaire IA' : 'AI Comment'}
                           </h4>
-                          {result.comment || comments[index] ? (
-                            <p className="ai-comment-text">
-                              💬 {result.comment || comments[index] === '__error__'
-                                ? (language === 'fr' ? '⚠️ Impossible de générer un commentaire' : '⚠️ Unable to generate comment')
-                                : comments[index]}
-                            </p>
-                          ) : loadingComments[index] ? (
-                            <div className="ai-comment-loading">
-                              <span className="ai-spinner" />
-                              {language === 'fr' ? 'Brave Search + DeepSeek en cours d\'analyse...' : 'Brave Search + DeepSeek analysing...'}
-                            </div>
-                          ) : (
-                            <button
-                              className="ai-comment-btn"
-                              onClick={() => fetchComment(result, index)}
-                            >
-                              🤖 {language === 'fr' ? 'Générer un commentaire IA' : 'Generate AI comment'}
-                            </button>
-                          )}
+                          {(() => {
+                            const displayComment = result.comment || comments[index];
+                            if (displayComment && displayComment !== '__error__') {
+                              return (
+                                <p className="ai-comment-text">
+                                  💬 {displayComment}
+                                </p>
+                              );
+                            } else if (displayComment === '__error__') {
+                              return (
+                                <button
+                                  className="ai-comment-btn"
+                                  onClick={() => {
+                                    setComments(prev => { const n = {...prev}; delete n[index]; return n; });
+                                    fetchComment(result, index);
+                                  }}
+                                >
+                                  🔄 {language === 'fr' ? 'Réessayer' : 'Retry'}
+                                </button>
+                              );
+                            } else if (loadingComments[index]) {
+                              return (
+                                <div className="ai-comment-loading">
+                                  <span className="ai-spinner" />
+                                  {language === 'fr' ? 'Brave Search + DeepSeek en cours d\'analyse...' : 'Brave Search + DeepSeek analysing...'}
+                                </div>
+                              );
+                            } else {
+                              return (
+                                <button
+                                  className="ai-comment-btn"
+                                  onClick={() => fetchComment(result, index)}
+                                >
+                                  🤖 {language === 'fr' ? 'Générer un commentaire IA' : 'Generate AI comment'}
+                                </button>
+                              );
+                            }
+                          })()}
                         </div>
                       )}
                     </div>

@@ -605,3 +605,68 @@
 .name-comparison strong {
   color: var(--primary-color);
 }
+/* ── AI Comment Section ──────────────────────────────────────────────────── */
+.ai-comment-section {
+  background: linear-gradient(135deg, #fef2f2 0%, #fff7ed 100%);
+  border: 1px solid #fecaca;
+  border-left: 4px solid #EF4444;
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+}
+
+.ai-comment-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #EF4444;
+  margin: 0 0 12px 0;
+}
+
+.ai-comment-text {
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  line-height: 1.6;
+  font-style: italic;
+  margin: 0;
+}
+
+.ai-comment-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.ai-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #fecaca;
+  border-top-color: #EF4444;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.ai-comment-btn {
+  padding: 8px 18px;
+  background: #EF4444;
+  color: white;
+  border: none;
+  border-radius: var(--radius-full);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.ai-comment-btn:hover {
+  background: #DC2626;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}

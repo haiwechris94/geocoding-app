@@ -6,7 +6,7 @@ import ExportOptions from '../components/ExportOptions';
 import './Results.css';
 
 const Results = () => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [data, setData] = useState(null);
   const [results, setResults] = useState([]);
 
@@ -145,6 +145,8 @@ const Results = () => {
             onEditResult={handleEditResult}
             onDeleteResult={handleDeleteResult}
             onValidateNameSuggestion={handleValidateNameSuggestion}
+            showComments={true}
+            language={language}
           />
         </section>
 

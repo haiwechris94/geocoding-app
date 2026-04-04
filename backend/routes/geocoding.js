@@ -585,4 +585,50 @@ router.post('/village-info', async (req, res) => {
   }
 });
 
+// ===========================================
+// Village Comment Route / Route Commentaire Village
+// ===========================================
+
+/**
+ * @route POST /api/geocoding/village-comment
+ * @desc Generate AI comment for a village using Brave Search + DeepSeek
+ */
+router.post('/village-comment', async (req, res) => {
+  try {
+    const { villageName, country, latitude, longitude, lang } = req.body;
+    const language = lang || (req.headers['accept-language']?.startsWith('fr') ? 'fr' : 'en');
+
+    if (!villageName || !villageName.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: { en: 'Village name required', fr: 'Nom de village requis' }
+      });
+    }
+
+    const { generateVillageComment } = require('../services/geoAgent');
+    const comment = await generateVillageComment(
+      villageName.trim(),
+      country || '',
+      latitude || null,
+      longitude || null,
+      language
+    );
+
+    res.json({
+      success: true,
+      comment: comment || null,
+      villageName: villageName.trim(),
+    });
+  } catch (error) {
+    console.error('[village-comment] error:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        en: 'Error generating comment',
+        fr: 'Erreur lors de la génération du commentaire'
+      }
+    });
+  }
+});
+
 module.exports = router;

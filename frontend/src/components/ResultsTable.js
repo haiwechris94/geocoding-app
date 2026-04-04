@@ -4,13 +4,46 @@ import { aiAPI } from '../services/api';
 import { toast } from 'react-toastify';
 import './ResultsTable.css';
 
-const ResultsTable = ({ results, onEditResult, onDeleteResult, onValidateNameSuggestion }) => {
-  const { t, language } = useLanguage();
+const ResultsTable = ({ results, onEditResult, onDeleteResult, onValidateNameSuggestion, language: langProp }) => {
+  const { t, language: ctxLanguage } = useLanguage();
+  const language = langProp || ctxLanguage;
   const [editingId, setEditingId] = useState(null);
   const [editValues, setEditValues] = useState({ latitude: '', longitude: '' });
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [expandedRows, setExpandedRows] = useState(new Set());
   const [validatedNames, setValidatedNames] = useState({});
+  const [comments, setComments] = useState({});
+  const [loadingComments, setLoadingComments] = useState({});
+
+  const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+
+  const fetchComment = async (result, index) => {
+    if (loadingComments[index] || comments[index]) return;
+    setLoadingComments(prev => ({ ...prev, [index]: true }));
+    try {
+      const resp = await fetch(`${API_BASE}/geocoding/village-comment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept-Language': language },
+        body: JSON.stringify({
+          villageName: result.villageName,
+          country: result.country || result.filters?.country || result.formattedAddress?.split(',').slice(-1)[0]?.trim() || '',
+          latitude: result.latitude,
+          longitude: result.longitude,
+          lang: language,
+        }),
+      });
+      const data = await resp.json();
+      if (data.success && data.comment) {
+        setComments(prev => ({ ...prev, [index]: data.comment }));
+      } else {
+        setComments(prev => ({ ...prev, [index]: '__error__' }));
+      }
+    } catch (e) {
+      setComments(prev => ({ ...prev, [index]: '__error__' }));
+    } finally {
+      setLoadingComments(prev => ({ ...prev, [index]: false }));
+    }
+  };
 
   const handleSort = (key) => {
     let direction = 'asc';
@@ -345,7 +378,8 @@ const ResultsTable = ({ results, onEditResult, onDeleteResult, onValidateNameSug
 
   // Check if any result needs expanded details
   const hasExpandableContent = (result) => {
-    return (result.confidence && result.confidence < 1) || 
+    return result.found ||
+           (result.confidence && result.confidence < 1) ||
            (result.nameSuggestions && result.nameSuggestions.length > 0);
   };
 
@@ -465,13 +499,41 @@ const ResultsTable = ({ results, onEditResult, onDeleteResult, onValidateNameSug
                   </div>
                 </td>
               </tr>
-              {/* Expanded row for confidence details and name suggestions */}
+              {/* Expanded row for confidence details, name suggestions and AI comment */}
               {expandedRows.has(index) && hasExpandableContent(result) && (
                 <tr className="expanded-row">
                   <td colSpan="9">
                     <div className="expanded-content">
                       {result.confidence < 1 && result.confidenceDetails && renderConfidenceDetails(result, index)}
                       {result.nameSuggestions && result.nameSuggestions.length > 0 && renderNameSuggestions(result, index)}
+
+                      {/* AI Comment Section */}
+                      {result.found && (
+                        <div className="ai-comment-section">
+                          <h4 className="ai-comment-title">
+                            🤖 {language === 'fr' ? 'Commentaire IA' : 'AI Comment'}
+                          </h4>
+                          {result.comment || comments[index] ? (
+                            <p className="ai-comment-text">
+                              💬 {result.comment || comments[index] === '__error__'
+                                ? (language === 'fr' ? '⚠️ Impossible de générer un commentaire' : '⚠️ Unable to generate comment')
+                                : comments[index]}
+                            </p>
+                          ) : loadingComments[index] ? (
+                            <div className="ai-comment-loading">
+                              <span className="ai-spinner" />
+                              {language === 'fr' ? 'Brave Search + DeepSeek en cours d\'analyse...' : 'Brave Search + DeepSeek analysing...'}
+                            </div>
+                          ) : (
+                            <button
+                              className="ai-comment-btn"
+                              onClick={() => fetchComment(result, index)}
+                            >
+                              🤖 {language === 'fr' ? 'Générer un commentaire IA' : 'Generate AI comment'}
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </td>
                 </tr>

@@ -249,12 +249,92 @@ const geoAgent = async (villageName, country = '') => {
   // Let AI pick the best from top candidates
   const best = await scoreWithAI(villageName, country, deduplicated.slice(0, 5));
 
+  // Generate AI comment using Brave + DeepSeek
+  const comment = await generateVillageComment(
+    villageName, country,
+    best?.latitude, best?.longitude,
+    'fr' // default lang; can be passed as param
+  );
+
   return {
     ...best,
     found: true,
+    comment,
     alternatives: deduplicated.slice(0, 5),
     totalSources: allCandidates.length,
   };
+};
+
+// ── Generate AI comment for a village ─────────────────────────────────────
+// Uses Brave Search to find web info, then DeepSeek to write a short comment
+const generateVillageComment = async (villageName, country = '', lat = null, lng = null, lang = 'fr') => {
+  const deepseekKey = process.env.DEEPSEEK_API_KEY;
+  const braveKey    = process.env.BRAVE_SEARCH_API_KEY;
+  const baseUrl     = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
+
+  if (!deepseekKey) return null;
+
+  // ── Step 1: Brave Search for web context ──────────────────────────────
+  let webContext = '';
+  if (braveKey) {
+    try {
+      const queries = [
+        `"${villageName}" ${country} village population history`,
+        `"${villageName}" ${country} coordinates location`,
+      ];
+      const snippets = [];
+      for (const q of queries) {
+        const resp = await axios.get('https://api.search.brave.com/res/v1/web/search', {
+          params: { q, count: 3 },
+          headers: { 'Accept': 'application/json', 'X-Subscription-Token': braveKey },
+          timeout: 8000,
+        });
+        const items = resp.data?.web?.results || [];
+        items.forEach(item => {
+          if (item.description) snippets.push(item.description);
+        });
+      }
+      if (snippets.length > 0) {
+        webContext = `\n\nWeb search results:\n${snippets.slice(0, 5).join('\n')}`;
+      }
+    } catch (e) {
+      console.warn('[Comment] Brave Search error:', e.message);
+    }
+  }
+
+  // ── Step 2: DeepSeek generates the comment ────────────────────────────
+  try {
+    const coordInfo = lat && lng ? ` at coordinates (${Number(lat).toFixed(4)}, ${Number(lng).toFixed(4)})` : '';
+    const langInstruction = lang === 'fr'
+      ? 'Respond in French. Write 1-2 sentences maximum.'
+      : 'Respond in English. Write 1-2 sentences maximum.';
+
+    const prompt = `You are a geographic expert on African villages.
+${langInstruction}
+Write a SHORT factual comment (1-2 sentences) about the village or place named "${villageName}" in ${country || 'Africa'}${coordInfo}.
+Include: what type of place it is, which administrative area it belongs to, any notable characteristic.
+If the place seems not to exist or is very obscure, say so briefly and suggest what the name might refer to.
+Do NOT invent coordinates or precise population numbers.
+${webContext}
+
+Comment:`;
+
+    const resp = await axios.post(`${baseUrl}/v1/chat/completions`, {
+      model: 'deepseek-chat',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 120,
+      temperature: 0.3,
+    }, {
+      headers: { Authorization: `Bearer ${deepseekKey}`, 'Content-Type': 'application/json' },
+      timeout: 12000,
+    });
+
+    const comment = resp.data?.choices?.[0]?.message?.content?.trim();
+    return comment || null;
+  } catch (e) {
+    console.warn('[Comment] DeepSeek error:', e.message);
+    return null;
+  }
 };
 
 // ── Similar village suggestions ────────────────────────────────────────────
@@ -283,4 +363,4 @@ const suggestSimilarVillages = async (villageName, country = '') => {
   }
 };
 
-module.exports = { geoAgent, suggestSimilarVillages };
+module.exports = { geoAgent, suggestSimilarVillages, generateVillageComment };

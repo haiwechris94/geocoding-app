@@ -1,4 +1,7 @@
-const Fuse = require('fuse.js');
+let Fuse = null;
+try { Fuse = require('fuse.js'); } catch (e) {
+  console.warn('[FuzzyMatchService] fuse.js not available, falling back to Levenshtein only');
+}
 const doubleMetaphone = require('double-metaphone');
 
 /**
@@ -23,25 +26,31 @@ class FuzzyMatchService {
    * @returns {Array} Matched results with scores
    */
   findMatches(searchTerm, candidates, limit = 5) {
-    if (!candidates || candidates.length === 0) {
-      return [];
+    if (!candidates || candidates.length === 0) return [];
+
+    // If fuse.js is available, use it
+    if (Fuse) {
+      const fuse = new Fuse(candidates, this.fuseOptions);
+      const results = fuse.search(searchTerm);
+      return results.slice(0, limit).map(result => {
+        const fuseScore = 1 - result.score;
+        const candidateName = result.item.name || result.item.displayName || '';
+        const combined = this.combinedSimilarity(searchTerm, candidateName);
+        const finalScore = Math.max(fuseScore, combined);
+        return { ...result.item, matchScore: finalScore, confidence: this.getConfidenceLevel(1 - finalScore) };
+      });
     }
 
-    const fuse = new Fuse(candidates, this.fuseOptions);
-    const results = fuse.search(searchTerm);
-
-    return results.slice(0, limit).map(result => {
-      const fuseScore = 1 - result.score; // Convert to similarity score (higher = better)
-      const candidateName = result.item.name || result.item.displayName || '';
-      const combined = this.combinedSimilarity(searchTerm, candidateName);
-      const finalScore = Math.max(fuseScore, combined);
-
-      return {
-        ...result.item,
-        matchScore: finalScore,
-        confidence: this.getConfidenceLevel(1 - finalScore)
-      };
-    });
+    // Fallback: use only Levenshtein + phonetic similarity
+    return candidates
+      .map(item => {
+        const candidateName = item.name || item.displayName || '';
+        const score = this.combinedSimilarity(searchTerm, candidateName);
+        return { ...item, matchScore: score, confidence: this.getConfidenceLevel(1 - score) };
+      })
+      .filter(item => item.matchScore >= 0.3)
+      .sort((a, b) => b.matchScore - a.matchScore)
+      .slice(0, limit);
   }
 
   /**

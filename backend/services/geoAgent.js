@@ -146,7 +146,8 @@ const searchPhoton = async (villageName, country) => {
 const scoreWithAI = async (villageName, country, candidates) => {
   const key = process.env.DEEPSEEK_API_KEY;
   const baseUrl = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
-  if (!key || candidates.length === 0) return candidates[0] || null;
+  if (!candidates || candidates.length === 0) return null;
+  if (!key) return candidates[0] || null;
 
   try {
     const prompt = `You are a geocoding expert for African villages.
@@ -268,12 +269,23 @@ const geoAgent = async (villageName, country = '', filters = {}) => {
   // Let AI pick the best from top candidates
   const best = await scoreWithAI(villageName, country, deduplicated.slice(0, 5));
 
+  // Guard: if best is null/undefined, return not-found
+  if (!best) {
+    console.warn('[GeoAgent] No best candidate selected, returning not-found');
+    return { found: false, villageName, error: 'No suitable result selected' };
+  }
+
   // Generate AI comment using Brave + DeepSeek
-  const comment = await generateVillageComment(
-    villageName, country,
-    best?.latitude, best?.longitude,
-    'fr' // default lang; can be passed as param
-  );
+  let comment = null;
+  try {
+    comment = await generateVillageComment(
+      villageName, country,
+      best.latitude, best.longitude,
+      'fr'
+    );
+  } catch (commentErr) {
+    console.warn('[GeoAgent] generateVillageComment failed:', commentErr.message);
+  }
 
   return {
     ...best,

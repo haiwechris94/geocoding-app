@@ -1,0 +1,74 @@
+$kind: http-request
+name: POST Geocode Single - Full Filters
+method: POST
+url: 'https://geocoding-app.onrender.com/api/geocoding/single'
+order: 5000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "villageName": "Kati",
+      "filters": {
+        "countryCode": "ML",
+        "country": "Mali",
+        "region": "Koulikoro",
+        "department": "Kati",
+        "refCityName": "Bamako",
+        "refCityLat": 12.6392,
+        "refCityLng": -8.0029,
+        "refCityDisplay": "Bamako, Mali"
+      }
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      const status = pm.response.code;
+      const body = pm.response.text();
+
+      pm.test("Not a 500 error", () => {
+        pm.expect(status).to.not.equal(500, `Server returned 500. Body: ${body}`);
+      });
+
+      pm.test("Response is valid JSON", () => {
+        const json = pm.response.json();
+        pm.expect(json).to.be.an('object');
+      });
+
+      if (status === 200) {
+        const json = pm.response.json();
+
+        pm.test("Response has success flag", () => {
+          pm.expect(json).to.have.property('success');
+          pm.expect(json.success).to.equal(true);
+        });
+
+        pm.test("Result has coordinates", () => {
+          pm.expect(json.data).to.have.property('latitude');
+          pm.expect(json.data).to.have.property('longitude');
+          pm.expect(json.data.latitude).to.be.a('number');
+          pm.expect(json.data.longitude).to.be.a('number');
+        });
+
+        pm.test("Result has source info", () => {
+          pm.expect(json.data).to.have.property('source');
+        });
+
+        pm.test("Confidence score is a number between 0 and 1", () => {
+          pm.expect(json.data.confidence).to.be.a('number');
+          pm.expect(json.data.confidence).to.be.within(0, 1);
+        });
+
+        pm.test("Village name is present in result", () => {
+          pm.expect(json.data).to.satisfy(
+            d => d.villageName || d.name || d.displayName,
+            "Expected a name field in result"
+          );
+        });
+      }
+
+      console.log("Status:", status);
+      console.log("Body:", body.substring(0, 1000));

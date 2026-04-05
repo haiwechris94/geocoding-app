@@ -1,0 +1,46 @@
+$kind: http-request
+name: POST Geocode Single - Minimal
+method: POST
+url: 'https://geocoding-app.onrender.com/api/geocoding/single'
+order: 1000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "villageName": "Bamako"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      const status = pm.response.code;
+      const body = pm.response.text();
+
+      pm.test("Not a 500 error", () => {
+        pm.expect(status).to.not.equal(500, `Server returned 500. Body: ${body}`);
+      });
+
+      pm.test("Response is valid JSON", () => {
+        const json = pm.response.json();
+        pm.expect(json).to.be.an('object');
+      });
+
+      if (status === 200) {
+        pm.test("Response has success flag", () => {
+          const json = pm.response.json();
+          pm.expect(json).to.have.property('success');
+        });
+
+        pm.test("Response data has coordinates", () => {
+          const json = pm.response.json();
+          pm.expect(json.data).to.have.property('latitude');
+          pm.expect(json.data).to.have.property('longitude');
+        });
+      }
+
+      // Log full response for debugging
+      console.log("Status:", status);
+      console.log("Body:", body.substring(0, 500));

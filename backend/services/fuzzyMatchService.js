@@ -2,7 +2,15 @@ let Fuse = null;
 try { Fuse = require('fuse.js'); } catch (e) {
   console.warn('[FuzzyMatchService] fuse.js not available, falling back to Levenshtein only');
 }
-const doubleMetaphone = require('double-metaphone');
+
+// double-metaphone can export as function or as {doubleMetaphone}
+let doubleMetaphone = null;
+try {
+  const dm = require('double-metaphone');
+  doubleMetaphone = typeof dm === 'function' ? dm : (dm.doubleMetaphone || dm.default || null);
+} catch (e) {
+  console.warn('[FuzzyMatchService] double-metaphone not available');
+}
 
 /**
  * Fuzzy match service for finding similar village names
@@ -162,14 +170,18 @@ class FuzzyMatchService {
    * @returns {Array<string>} [primaryCode, secondaryCode]
    */
   phoneticCode(name) {
-    if (!name) return ['', ''];
+    if (!name || !doubleMetaphone) return ['', ''];
     const normalized = name
       .toLowerCase()
       .trim()
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '');
-    const codes = doubleMetaphone(normalized);
-    return [codes[0] || '', codes[1] || ''];
+    try {
+      const codes = doubleMetaphone(normalized);
+      return [codes[0] || '', codes[1] || ''];
+    } catch (e) {
+      return ['', ''];
+    }
   }
 
   /**

@@ -338,8 +338,6 @@ const geocodeWithAllAPIs = async (query, filters = {}) => {
   const overpassService = require('./overpassService');
   const wikidataService = require('./wikidataService');
   const braveSearchService = require('./braveSearchService');
-  const { geoAgent } = require('./geoAgent');
-
   // Extract village name and country from query/filters
   const villageName = query.split(',')[0].trim();
   const country = filters.country || filters.countryCode || '';

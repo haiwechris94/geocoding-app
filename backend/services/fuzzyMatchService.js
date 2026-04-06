@@ -165,7 +165,59 @@ class FuzzyMatchService {
   }
 
   /**
+   * Normalize a name using French/African phonetic rules before Double Metaphone
+   * Normalise un nom avec des règles phonétiques françaises/africaines
+   * @param {string} name - Input name
+   * @returns {string} Phonetically normalized name
+   */
+  normalizePhonetic(name) {
+    if (!name) return '';
+    let s = name
+      .toLowerCase()
+      .trim()
+      // Remove accents
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+
+    // Double consonants → single
+    s = s.replace(/rr/g, 'r');
+    s = s.replace(/ll/g, 'l');
+    s = s.replace(/nn/g, 'n');
+
+    // Vowel digraph normalizations
+    s = s.replace(/iy/g, 'i');
+    s = s.replace(/ao/g, 'o');
+    s = s.replace(/au/g, 'o');
+    s = s.replace(/ou/g, 'u');
+    s = s.replace(/oi/g, 'wa');
+
+    // Consonant digraph normalizations
+    s = s.replace(/ph/g, 'f');
+    s = s.replace(/kh/g, 'k');
+    s = s.replace(/gh/g, 'g');
+    s = s.replace(/th/g, 't');
+    s = s.replace(/ck/g, 'k');
+    s = s.replace(/qu/g, 'k');
+
+    // Single character substitutions
+    s = s.replace(/x/g, 'ks');
+    s = s.replace(/z/g, 's');
+    s = s.replace(/w/g, 'v');
+
+    // y → i when between consonants or at end of word
+    s = s.replace(/(?<=[^aeiou\s])y(?=[^aeiou\s])/g, 'i'); // between consonants
+    s = s.replace(/y$/g, 'i');                               // at end of word
+
+    // Remove silent final 'e' and 's'
+    s = s.replace(/e$/g, '');
+    s = s.replace(/s$/g, '');
+
+    return s;
+  }
+
+  /**
    * Compute Double Metaphone phonetic codes for a name
+   * Applies French/African phonetic normalization before Double Metaphone
    * @param {string} name - Input name
    * @returns {Array<string>} [primaryCode, secondaryCode]
    */
@@ -186,6 +238,7 @@ class FuzzyMatchService {
 
   /**
    * Calculate phonetic similarity between two names using Double Metaphone
+   * Also compares normalized phonetic forms directly for African/French names
    * @param {string} name1 - First name
    * @param {string} name2 - Second name
    * @returns {number} Phonetic similarity score (0-1)
@@ -205,6 +258,11 @@ class FuzzyMatchService {
 
     // Secondary match
     if (secondary1 && secondary2 && secondary1 === secondary2) return 0.6;
+
+    // Normalized phonetic form exact match (French/African names)
+    const norm1 = this.normalizePhonetic(name1);
+    const norm2 = this.normalizePhonetic(name2);
+    if (norm1 && norm2 && norm1 === norm2) return 1.0;
 
     // Partial similarity based on common characters between codes
     const code1 = primary1 || secondary1 || '';
@@ -231,7 +289,8 @@ class FuzzyMatchService {
   }
 
   /**
-   * Calculate combined similarity: 60% Levenshtein + 40% phonetic
+   * Calculate combined similarity: 50% Levenshtein + 50% phonetic
+   * Phonetic weight increased (from 40%) since normalizePhonetic improves African name matching
    * @param {string} name1 - First name
    * @param {string} name2 - Second name
    * @returns {number} Combined similarity score (0-1)
@@ -239,7 +298,7 @@ class FuzzyMatchService {
   combinedSimilarity(name1, name2) {
     const levenshteinScore = this.calculateSimilarity(name1, name2);
     const phoneticScore = this.phoneticSimilarity(name1, name2);
-    return (levenshteinScore * 0.6) + (phoneticScore * 0.4);
+    return (levenshteinScore * 0.5) + (phoneticScore * 0.5);
   }
 }
 

@@ -291,7 +291,7 @@ const FilterOptions = ({ filters, onFiltersChange }) => {
       <div className="ref-city-section">
         <label className="filter-label">
           📍 {language === 'fr' ? 'Ville de référence pour la proximité' : 'Reference city for proximity'}
-          <span className="optional"> {language === 'fr' ? '(remplace le centre du pays)' : '(replaces country center)'}</span>
+          <span className="optional"> {language === 'fr' ? '(Nom de la localisation du Centre de formation)' : '(Name of the training center location)'}</span>
         </label>
         <div className="ref-city-input-row">
           <input

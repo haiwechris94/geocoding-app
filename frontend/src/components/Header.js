@@ -11,7 +11,7 @@ const Header = () => {
 
   const mainNavItems = [
     { path: '/',        label: language === 'en' ? 'Home'          : 'Accueil' },
-    { path: '/batch',   label: language === 'en' ? 'Batch Geocode' : 'Géocodage par Lots' },
+    { path: '/batch',   label: language === 'en' ? 'Batch Geocode' : 'Recherche' },
     { path: '/history', label: language === 'en' ? 'History'       : 'Historique' },
     { path: '/about',   label: language === 'en' ? 'About'         : 'À propos de' },
   ];

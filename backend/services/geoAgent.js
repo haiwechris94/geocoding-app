@@ -1,28 +1,51 @@
 /**
- * GeoAgent Enhanced — Multi-Source Village Geocoder
- * Intègre : Nominatim, GeoNames, OpenCage, Google Maps,
- *            Overpass (OSM), Wikidata, Brave Search
- * 
- * Utilise Levenshtein pour corriger les fautes de frappe
- * L'IA (DeepSeek) choisit le meilleur résultat final
+ * GeoAgent v3 — Architecture en 4 niveaux
+ *
+ * 🟢 TIER 1 Core      : Nominatim + GeoNames + Overpass  (gratuit, toujours actif)
+ * 🟡 TIER 2 Complement: OpenCage || LocationIQ            (si Tier 1 insuffisant)
+ * 🔵 TIER 3 Intelligence: DeepSeek                        (sélection finale IA)
+ * 🔴 TIER 4 Premium   : Google Maps                       (fallback ultime)
+ *
+ * Optimisations vitesse :
+ *  - Cache en mémoire 1h pour éviter les appels répétés
+ *  - Early exit si un résultat Tier1 a nameSim >= 0.85
+ *  - Timeouts courts (6s core, 8s complement)
+ *  - Tier 2 lancé uniquement si Tier1 insuffisant
+ *  - Commentaire IA généré en arrière-plan (non bloquant)
+ *  - Wikidata/Brave supprimés du flux principal (trop lents/instables)
  */
 
 const axios = require('axios');
-
-// ── Import new services ────────────────────────────────────────────────────
 const overpassService   = require('./overpassService');
-const wikidataService   = require('./wikidataService');
-const braveSearchService = require('./braveSearchService');
+const fuzzyMatchService = require('./fuzzyMatchService');
 
-// ── Levenshtein distance (already installed) ───────────────────────────────
-let levenshtein;
-try { levenshtein = require('fast-levenshtein'); } catch (e) {}
+// ── Cache en mémoire (TTL 1h) ──────────────────────────────────────────────
+const cache = new Map();
+const CACHE_TTL = 60 * 60 * 1000; // 1 heure
 
+const cacheGet = (key) => {
+  const entry = cache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.ts > CACHE_TTL) { cache.delete(key); return null; }
+  return entry.data;
+};
+const cacheSet = (key, data) => cache.set(key, { data, ts: Date.now() });
+
+// ── Similarity phonétique (Levenshtein + Double Metaphone) ─────────────────
 const similarity = (a, b) => {
-  if (!levenshtein) return 1;
-  const dist = levenshtein.get(a.toLowerCase(), b.toLowerCase());
-  const maxLen = Math.max(a.length, b.length);
-  return maxLen === 0 ? 1 : 1 - dist / maxLen;
+  if (!a || !b) return 0;
+  try { return fuzzyMatchService.combinedSimilarity(a, b); } catch (e) {
+    // Fallback Levenshtein pur
+    const s1 = a.toLowerCase().trim();
+    const s2 = b.toLowerCase().trim();
+    if (s1 === s2) return 1;
+    const len = Math.max(s1.length, s2.length);
+    if (len === 0) return 1;
+    let dist = 0;
+    for (let i = 0; i < Math.min(s1.length, s2.length); i++) if (s1[i] !== s2[i]) dist++;
+    dist += Math.abs(s1.length - s2.length);
+    return 1 - dist / len;
+  }
 };
 
 // ── Haversine ──────────────────────────────────────────────────────────────
@@ -31,44 +54,79 @@ const haversine = (lat1, lng1, lat2, lng2) => {
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLng = ((lng2 - lng1) * Math.PI) / 180;
   const a = Math.sin(dLat/2)**2 +
-    Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+    Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 };
 
-// ── Nominatim ──────────────────────────────────────────────────────────────
-const searchNominatim = async (villageName, country) => {
+// ═══════════════════════════════════════════════════════════════════════════
+// 🟢 TIER 1 — CORE (gratuit, sans clé, toujours actif)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const searchNominatim = async (query, country, refLat, refLng) => {
+  const cacheKey = `nominatim:${query}:${country}`;
+  const cached = cacheGet(cacheKey);
+  if (cached) return cached;
+
+  // Build viewbox if refCity set (restrict search to ~200km around refCity)
+  const params = {
+    q: `${query}${country ? ', ' + country : ''}`,
+    format: 'json',
+    limit: 5,
+    addressdetails: 1,
+    'accept-language': 'fr,en',
+  };
+  if (refLat && refLng) {
+    const delta = 2.0; // ~200km
+    params.viewbox = `${refLng - delta},${refLat - delta},${refLng + delta},${refLat + delta}`;
+    params.bounded = 0; // show outside viewbox too but prefer inside
+  }
+
   try {
     const resp = await axios.get('https://nominatim.openstreetmap.org/search', {
-      params: { q: `${villageName}${country ? ', ' + country : ''}`, format: 'json', limit: 3, addressdetails: 1 },
+      params,
       headers: { 'User-Agent': 'VillagePointApp/1.0 contact@villagepoint.app' },
-      timeout: 10000,
+      timeout: 6000,
     });
-    return (resp.data || []).map(r => ({
-      villageName: r.display_name.split(',')[0],
+    const results = (resp.data || []).map(r => ({
+      villageName: r.display_name.split(',')[0].trim(),
       found: true,
       latitude: parseFloat(r.lat),
       longitude: parseFloat(r.lon),
       source: 'Nominatim',
       label: r.display_name,
-      confidence: parseFloat(r.importance || 0.5),
-      reliability: 'medium',
+      confidence: Math.min(parseFloat(r.importance || 0.5) + 0.1, 1.0),
+      reliability: 0.85,
+      tier: 1,
     }));
+    cacheSet(cacheKey, results);
+    return results;
   } catch (e) {
     console.warn('[Nominatim] error:', e.message);
     return [];
   }
 };
 
-// ── GeoNames ───────────────────────────────────────────────────────────────
 const searchGeoNames = async (villageName, country) => {
   const username = process.env.GEONAMES_USERNAME;
   if (!username) return [];
+
+  const cacheKey = `geonames:${villageName}:${country}`;
+  const cached = cacheGet(cacheKey);
+  if (cached) return cached;
+
   try {
     const resp = await axios.get('http://api.geonames.org/searchJSON', {
-      params: { q: villageName, country: country || '', maxRows: 3, username, featureClass: 'P' },
-      timeout: 10000,
+      params: {
+        q: villageName,
+        country: country || '',
+        maxRows: 5,
+        username,
+        featureClass: 'P',
+        style: 'MEDIUM',
+      },
+      timeout: 6000,
     });
-    return (resp.data?.geonames || []).map(r => ({
+    const results = (resp.data?.geonames || []).map(r => ({
       villageName: r.name,
       found: true,
       latitude: parseFloat(r.lat),
@@ -77,27 +135,65 @@ const searchGeoNames = async (villageName, country) => {
       country: r.countryName,
       region: r.adminName1,
       population: r.population || null,
-      label: `${r.name}, ${r.adminName1}, ${r.countryName}`,
-      confidence: 0.80,
-      reliability: 'medium',
+      label: `${r.name}, ${r.adminName1 || ''}, ${r.countryName}`,
+      confidence: 0.82,
+      reliability: 0.88,
+      tier: 1,
     }));
+    cacheSet(cacheKey, results);
+    return results;
   } catch (e) {
     console.warn('[GeoNames] error:', e.message);
     return [];
   }
 };
 
-// ── OpenCage ───────────────────────────────────────────────────────────────
-const searchOpenCage = async (villageName, country) => {
+const searchOverpass = async (villageName, refLat, refLng) => {
+  const cacheKey = `overpass:${villageName}:${refLat}:${refLng}`;
+  const cached = cacheGet(cacheKey);
+  if (cached) return cached;
+
+  try {
+    let results;
+    if (refLat && refLng) {
+      results = await overpassService.searchVillageInRadius(villageName, refLat, refLng, 150);
+    } else {
+      results = await overpassService.searchVillageGlobal(villageName, null);
+    }
+    const mapped = (results || []).map(r => ({ ...r, tier: 1, reliability: 0.88 }));
+    cacheSet(cacheKey, mapped);
+    return mapped;
+  } catch (e) {
+    console.warn('[Overpass] error:', e.message);
+    return [];
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 🟡 TIER 2 — COMPLEMENT (lancé si Tier1 insuffisant)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const searchOpenCage = async (query, country) => {
   const key = process.env.OPENCAGE_API_KEY;
   if (!key) return [];
+
+  const cacheKey = `opencage:${query}:${country}`;
+  const cached = cacheGet(cacheKey);
+  if (cached) return cached;
+
   try {
     const resp = await axios.get('https://api.opencagedata.com/geocode/v1/json', {
-      params: { q: `${villageName}${country ? ', ' + country : ''}`, key, limit: 3, no_annotations: 1 },
-      timeout: 10000,
+      params: {
+        q: `${query}${country ? ', ' + country : ''}`,
+        key,
+        limit: 3,
+        no_annotations: 1,
+        language: 'fr',
+      },
+      timeout: 8000,
     });
-    return (resp.data?.results || []).map(r => ({
-      villageName: r.components.village || r.components.town || r.components.city || villageName,
+    const results = (resp.data?.results || []).map(r => ({
+      villageName: r.components.village || r.components.town || r.components.city || query.split(',')[0],
       found: true,
       latitude: r.geometry.lat,
       longitude: r.geometry.lng,
@@ -106,292 +202,348 @@ const searchOpenCage = async (villageName, country) => {
       region: r.components.state,
       label: r.formatted,
       confidence: r.confidence / 10,
-      reliability: r.confidence >= 7 ? 'high' : 'medium',
+      reliability: 0.88,
+      tier: 2,
     }));
+    cacheSet(cacheKey, results);
+    return results;
   } catch (e) {
     console.warn('[OpenCage] error:', e.message);
     return [];
   }
 };
 
-// ── Photon ─────────────────────────────────────────────────────────────────
-const searchPhoton = async (villageName, country) => {
+const searchLocationIQ = async (query, country) => {
+  const key = process.env.LOCATIONIQ_API_KEY;
+  if (!key) return [];
+
+  const cacheKey = `locationiq:${query}:${country}`;
+  const cached = cacheGet(cacheKey);
+  if (cached) return cached;
+
   try {
-    const resp = await axios.get('https://photon.komoot.io/api/', {
-      params: { q: `${villageName}${country ? ', ' + country : ''}`, limit: 3 },
-      timeout: 10000,
+    const resp = await axios.get('https://us1.locationiq.com/v1/search', {
+      params: {
+        key,
+        q: `${query}${country ? ', ' + country : ''}`,
+        format: 'json',
+        limit: 3,
+        addressdetails: 1,
+        'accept-language': 'fr',
+      },
+      timeout: 8000,
     });
-    return (resp.data?.features || []).map(f => {
-      const p = f.properties;
-      return {
-        villageName: p.name || villageName,
-        found: true,
-        latitude: f.geometry.coordinates[1],
-        longitude: f.geometry.coordinates[0],
-        source: 'Photon (Komoot)',
-        country: p.country,
-        region: p.state,
-        label: [p.name, p.city, p.country].filter(Boolean).join(', '),
-        confidence: 0.75,
-        reliability: 'medium',
-      };
-    });
+    const results = (resp.data || []).map(r => ({
+      villageName: r.display_name.split(',')[0].trim(),
+      found: true,
+      latitude: parseFloat(r.lat),
+      longitude: parseFloat(r.lon),
+      source: 'LocationIQ',
+      label: r.display_name,
+      confidence: 0.82,
+      reliability: 0.82,
+      tier: 2,
+    }));
+    cacheSet(cacheKey, results);
+    return results;
   } catch (e) {
-    console.warn('[Photon] error:', e.message);
+    console.warn('[LocationIQ] error:', e.message);
     return [];
   }
 };
 
-// ── AI scoring via DeepSeek ────────────────────────────────────────────────
-const scoreWithAI = async (villageName, country, candidates) => {
-  const key = process.env.DEEPSEEK_API_KEY;
-  const baseUrl = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
-  if (!candidates || candidates.length === 0) return null;
-  if (!key) return candidates[0] || null;
+// ═══════════════════════════════════════════════════════════════════════════
+// 🔴 TIER 4 — GOOGLE MAPS (fallback ultime, seulement si tout échoue)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const searchGoogleMaps = async (query, country) => {
+  const key = process.env.GOOGLE_MAPS_API_KEY;
+  if (!key) return [];
+
+  const cacheKey = `google:${query}:${country}`;
+  const cached = cacheGet(cacheKey);
+  if (cached) return cached;
 
   try {
-    const prompt = `You are a geocoding expert for African villages.
-Given the query: "${villageName}"${country ? ' in ' + country : ''}
-Choose the BEST matching result from these candidates. Return ONLY the index number (0, 1, 2...).
+    const resp = await axios.get('https://maps.googleapis.com/maps/api/geocode/json', {
+      params: {
+        address: `${query}${country ? ', ' + country : ''}`,
+        key,
+        language: 'fr',
+        region: 'africa',
+      },
+      timeout: 8000,
+    });
+    const results = (resp.data?.results || []).map(r => ({
+      villageName: r.address_components[0]?.long_name || query,
+      found: true,
+      latitude: r.geometry.location.lat,
+      longitude: r.geometry.location.lng,
+      source: 'Google Maps',
+      label: r.formatted_address,
+      confidence: 0.95,
+      reliability: 0.95,
+      tier: 4,
+    }));
+    cacheSet(cacheKey, results);
+    return results;
+  } catch (e) {
+    console.warn('[Google Maps] error:', e.message);
+    return [];
+  }
+};
 
-Candidates:
-${candidates.map((c, i) => `${i}: ${c.villageName} (${c.latitude?.toFixed(4)}, ${c.longitude?.toFixed(4)}) source=${c.source} confidence=${c.confidence}`).join('\n')}
+// ═══════════════════════════════════════════════════════════════════════════
+// 🔵 TIER 3 — DEEPSEEK (sélection intelligente parmi les finalistes)
+// ═══════════════════════════════════════════════════════════════════════════
 
-Return only a single number.`;
+const scoreWithAI = async (villageName, country, candidates) => {
+  const key     = process.env.DEEPSEEK_API_KEY;
+  const baseUrl = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
+  if (!key || !candidates || candidates.length === 0) return candidates?.[0] || null;
+
+  try {
+    const prompt = `Geocoding expert for African villages. Query: "${villageName}"${country ? ' in ' + country : ''}.
+Pick the BEST match. Return ONLY the index number.
+
+${candidates.map((c, i) => `${i}: ${c.villageName} (${c.latitude?.toFixed(4)}, ${c.longitude?.toFixed(4)}) src=${c.source}`).join('\n')}`;
 
     const resp = await axios.post(`${baseUrl}/v1/chat/completions`, {
       model: 'deepseek-chat',
       messages: [{ role: 'user', content: prompt }],
-      max_tokens: 5,
+      max_tokens: 3,
       temperature: 0,
     }, {
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      timeout: 8000,
+      timeout: 6000,
     });
 
     const idx = parseInt(resp.data?.choices?.[0]?.message?.content?.trim());
-    if (!isNaN(idx) && candidates[idx]) {
-      return { ...candidates[idx], aiSelected: true };
-    }
+    if (!isNaN(idx) && candidates[idx]) return { ...candidates[idx], aiSelected: true };
   } catch (e) {
-    console.warn('[AI Scoring] error:', e.message);
+    console.warn('[DeepSeek] scoring error:', e.message);
   }
   return candidates[0];
 };
 
-// ── Main GeoAgent function ─────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// 🎯 SCORE & RANK
+// ═══════════════════════════════════════════════════════════════════════════
+
+const scoreAndRank = (candidates, villageName, refLat, refLng) => {
+  const SOURCE_WEIGHTS = {
+    'GeoNames': 0.95, 'OpenCage': 0.92, 'LocationIQ': 0.90,
+    'Overpass (OpenStreetMap)': 0.90, 'Nominatim': 0.88,
+    'Google Maps': 0.95, 'Photon (Komoot)': 0.80,
+  };
+
+  return candidates
+    .map(c => {
+      const nameSim       = similarity(villageName, c.villageName || '');
+      const sourceWeight  = SOURCE_WEIGHTS[c.source] || 0.75;
+      const reliabilityW  = typeof c.reliability === 'number' ? c.reliability : 0.75;
+
+      let proximityBoost = 0;
+      if (refLat && refLng && c.latitude && c.longitude) {
+        const dist = haversine(refLat, refLng, c.latitude, c.longitude);
+        proximityBoost = dist <= 30 ? 0.25 : dist <= 80 ? 0.15 : dist <= 150 ? 0.07 : 0;
+      }
+
+      return {
+        ...c,
+        _nameSim: nameSim,
+        score: (nameSim * 0.45) + (reliabilityW * 0.25) + (sourceWeight * 0.15) + (proximityBoost * 0.15),
+      };
+    })
+    .filter(c => c._nameSim >= 0.25) // Reject clearly wrong matches
+    .sort((a, b) => b.score - a.score);
+};
+
+// ── Deduplicate within 1km ─────────────────────────────────────────────────
+const deduplicate = (candidates) => {
+  const out = [];
+  for (const c of candidates) {
+    if (!out.some(e => haversine(e.latitude, e.longitude, c.latitude, c.longitude) < 1))
+      out.push(c);
+  }
+  return out;
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 🚀 MAIN GEOAGENT
+// ═══════════════════════════════════════════════════════════════════════════
+
 const geoAgent = async (villageName, country = '', filters = {}) => {
-  console.log(`[GeoAgent] Searching: "${villageName}" country="${country}"`);
+  const t0 = Date.now();
+  console.log(`[GeoAgent] "${villageName}" country="${country}"`);
 
-  // Build location-biased query if refCity is set
-  const refLat = filters.refCityLat ? parseFloat(filters.refCityLat) : null;
-  const refLng = filters.refCityLng ? parseFloat(filters.refCityLng) : null;
-  const refCityName = filters.refCityName || '';
+  const refLat     = filters.refCityLat  ? parseFloat(filters.refCityLat)  : null;
+  const refLng     = filters.refCityLng  ? parseFloat(filters.refCityLng)  : null;
+  const refName    = filters.refCityName || '';
+  const locationQ  = refName ? `${villageName}, near ${refName}, ${country}` : villageName;
 
-  // Enrich query with ref city for better results
-  const locationQuery = refCityName
-    ? `${villageName}, near ${refCityName}, ${country}`
-    : villageName;
-
-  // Run all sources in parallel
-  const [
-    nominatimResults,
-    geonamesResults,
-    opencageResults,
-    photonResults,
-    overpassResults,
-    wikidataResults,
-    braveResults,
-  ] = await Promise.allSettled([
-    searchNominatim(locationQuery, country),
+  // ── TIER 1: Core sources in parallel ──────────────────────────────────
+  const [nomRes, geoRes, ovpRes] = await Promise.allSettled([
+    searchNominatim(locationQ, country, refLat, refLng),
     searchGeoNames(villageName, country),
-    searchOpenCage(locationQuery, country),
-    searchPhoton(locationQuery, country),
-    refLat && refLng
-      ? overpassService.searchVillageInRadius(villageName, refLat, refLng, 100)
-      : overpassService.searchVillageGlobal(villageName, null),
-    wikidataService.geocodeVillage(villageName, country),
-    braveSearchService.searchVillage(villageName, country),
+    searchOverpass(villageName, refLat, refLng),
   ]);
 
-  // Collect all successful results
-  const allCandidates = [
-    ...(nominatimResults.status === 'fulfilled' ? nominatimResults.value : []),
-    ...(geonamesResults.status  === 'fulfilled' ? geonamesResults.value  : []),
-    ...(opencageResults.status  === 'fulfilled' ? opencageResults.value  : []),
-    ...(photonResults.status    === 'fulfilled' ? photonResults.value    : []),
-    ...(overpassResults.status  === 'fulfilled' ? overpassResults.value  : []),
-    ...(wikidataResults.status  === 'fulfilled' ? wikidataResults.value  : []),
-    ...(braveResults.status     === 'fulfilled' ? braveResults.value     : []),
-  ].filter(r => r && r.latitude && r.longitude);
+  let tier1 = [
+    ...(nomRes.status === 'fulfilled' ? nomRes.value : []),
+    ...(geoRes.status === 'fulfilled' ? geoRes.value : []),
+    ...(ovpRes.status === 'fulfilled' ? ovpRes.value : []),
+  ].filter(r => r?.latitude && r?.longitude);
 
-  console.log(`[GeoAgent] Total candidates: ${allCandidates.length}`);
+  let ranked = scoreAndRank(tier1, villageName, refLat, refLng);
 
-  if (allCandidates.length === 0) {
-    return { found: false, villageName, error: 'No results from any source' };
+  console.log(`[GeoAgent] Tier1: ${tier1.length} candidates, ${ranked.length} after filter (${Date.now()-t0}ms)`);
+
+  // ── Early exit: if top result has very high similarity, skip Tier 2 ───
+  const EARLY_EXIT_THRESHOLD = 0.82;
+  if (ranked.length > 0 && ranked[0]._nameSim >= EARLY_EXIT_THRESHOLD) {
+    console.log(`[GeoAgent] Early exit — high confidence (${ranked[0]._nameSim.toFixed(2)})`);
+    const dedup  = deduplicate(ranked);
+    const best   = dedup[0];
+    _generateCommentAsync(villageName, country, best.latitude, best.longitude, filters.language || 'fr');
+    return { ...best, found: true, alternatives: dedup.slice(1, 5), totalSources: tier1.length };
   }
 
-  // Score by name similarity + source weight + refCity proximity boost
-  const scored = allCandidates.map(c => {
-    const nameSim = similarity(villageName, c.villageName || '');
-    const sourceWeight = {
-      'Wikidata': 1.0, 'Wikidata (SPARQL)': 1.0,
-      'GeoNames': 0.95, 'OpenCage': 0.92,
-      'Overpass (OpenStreetMap)': 0.90,
-      'Nominatim': 0.88, 'Photon (Komoot)': 0.82,
-      'Brave Web Search': 0.60,
-    }[c.source] || 0.7;
+  // ── TIER 2: Complement (OpenCage || LocationIQ) ───────────────────────
+  const hasOpenCage   = !!process.env.OPENCAGE_API_KEY;
+  const hasLocationIQ = !!process.env.LOCATIONIQ_API_KEY;
 
-    // Proximity boost: if refCity set, prefer results within 100km
-    let proximityBoost = 0;
-    if (refLat && refLng && c.latitude && c.longitude) {
-      const dist = haversine(refLat, refLng, c.latitude, c.longitude);
-      proximityBoost = dist <= 50 ? 0.3 : dist <= 100 ? 0.15 : dist <= 200 ? 0.05 : 0;
+  if (hasOpenCage || hasLocationIQ) {
+    const [comp1, comp2] = await Promise.allSettled([
+      hasOpenCage   ? searchOpenCage(locationQ, country)   : Promise.resolve([]),
+      hasLocationIQ ? searchLocationIQ(locationQ, country) : Promise.resolve([]),
+    ]);
+    const tier2 = [
+      ...(comp1.status === 'fulfilled' ? comp1.value : []),
+      ...(comp2.status === 'fulfilled' ? comp2.value : []),
+    ].filter(r => r?.latitude && r?.longitude);
+
+    const allCandidates = [...tier1, ...tier2];
+    ranked = scoreAndRank(allCandidates, villageName, refLat, refLng);
+    console.log(`[GeoAgent] Tier2: +${tier2.length} candidates (${Date.now()-t0}ms)`);
+  }
+
+  // ── TIER 4: Google Maps fallback (only if still no good result) ───────
+  if (ranked.length === 0 || ranked[0]._nameSim < 0.35) {
+    console.log('[GeoAgent] Tier4: Google Maps fallback');
+    const googleRes = await searchGoogleMaps(locationQ, country);
+    if (googleRes.length > 0) {
+      ranked = scoreAndRank([...ranked, ...googleRes], villageName, refLat, refLng);
     }
-
-    return {
-      ...c,
-      score: (nameSim * 0.45) + ((c.confidence || 0.7) * 0.25) + (sourceWeight * 0.15) + (proximityBoost * 0.15),
-    };
-  });
-
-  scored.sort((a, b) => b.score - a.score);
-
-  // Deduplicate: group within 1km of each other
-  const deduplicated = [];
-  for (const cand of scored) {
-    const isDup = deduplicated.some(existing =>
-      haversine(existing.latitude, existing.longitude, cand.latitude, cand.longitude) < 1
-    );
-    if (!isDup) deduplicated.push(cand);
   }
 
-  // Let AI pick the best from top candidates
-  const best = await scoreWithAI(villageName, country, deduplicated.slice(0, 5));
-
-  // Guard: if best is null/undefined, return not-found
-  if (!best) {
-    console.warn('[GeoAgent] No best candidate selected, returning not-found');
-    return { found: false, villageName, error: 'No suitable result selected' };
+  if (ranked.length === 0) {
+    console.warn(`[GeoAgent] No result for "${villageName}"`);
+    return { found: false, villageName, error: 'Village non trouvé' };
   }
 
-  // Generate AI comment using Brave + DeepSeek
-  let comment = null;
-  try {
-    comment = await generateVillageComment(
-      villageName, country,
-      best.latitude, best.longitude,
-      'fr'
-    );
-  } catch (commentErr) {
-    console.warn('[GeoAgent] generateVillageComment failed:', commentErr.message);
-  }
+  const dedup = deduplicate(ranked);
+
+  // ── TIER 3: DeepSeek picks best among top 5 ───────────────────────────
+  const best = await scoreWithAI(villageName, country, dedup.slice(0, 5));
+
+  if (!best) return { found: false, villageName, error: 'Aucun résultat sélectionné' };
+
+  console.log(`[GeoAgent] Done in ${Date.now()-t0}ms — best: "${best.villageName}" [${best.source}]`);
+
+  // Comment generated in background (non-blocking)
+  _generateCommentAsync(villageName, country, best.latitude, best.longitude, filters.language || 'fr');
 
   return {
     ...best,
     found: true,
-    comment,
-    alternatives: deduplicated.slice(0, 5),
-    totalSources: allCandidates.length,
+    alternatives: dedup.slice(1, 5),
+    totalSources: ranked.length,
   };
 };
 
-// ── Generate AI comment for a village ─────────────────────────────────────
-// Uses Brave Search to find web info, then DeepSeek to write a short comment
+// ── Background comment generation (non-blocking) ──────────────────────────
+const _commentCache = new Map();
+const _generateCommentAsync = (villageName, country, lat, lng, lang) => {
+  const key = `comment:${villageName}:${country}`;
+  if (_commentCache.has(key)) return;
+  _commentCache.set(key, null); // Mark as in-progress
+  generateVillageComment(villageName, country, lat, lng, lang)
+    .then(comment => _commentCache.set(key, comment))
+    .catch(() => _commentCache.delete(key));
+};
+
+const getCommentFromCache = (villageName, country) =>
+  _commentCache.get(`comment:${villageName}:${country}`) || null;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 💬 VILLAGE COMMENT (Brave Search + DeepSeek)
+// ═══════════════════════════════════════════════════════════════════════════
+
 const generateVillageComment = async (villageName, country = '', lat = null, lng = null, lang = 'fr') => {
   const deepseekKey = process.env.DEEPSEEK_API_KEY;
   const braveKey    = process.env.BRAVE_SEARCH_API_KEY;
   const baseUrl     = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
-
   if (!deepseekKey) return null;
 
-  // ── Step 1: Brave Search for web context ──────────────────────────────
   let webContext = '';
   if (braveKey) {
     try {
-      const queries = [
-        `"${villageName}" ${country} village population history`,
-        `"${villageName}" ${country} coordinates location`,
-      ];
-      const snippets = [];
-      for (const q of queries) {
-        const resp = await axios.get('https://api.search.brave.com/res/v1/web/search', {
-          params: { q, count: 3 },
-          headers: { 'Accept': 'application/json', 'X-Subscription-Token': braveKey },
-          timeout: 8000,
-        });
-        const items = resp.data?.web?.results || [];
-        items.forEach(item => {
-          if (item.description) snippets.push(item.description);
-        });
-      }
-      if (snippets.length > 0) {
-        webContext = `\n\nWeb search results:\n${snippets.slice(0, 5).join('\n')}`;
-      }
+      const resp = await axios.get('https://api.search.brave.com/res/v1/web/search', {
+        params: { q: `"${villageName}" ${country} village localisation`, count: 3 },
+        headers: { Accept: 'application/json', 'X-Subscription-Token': braveKey },
+        timeout: 6000,
+      });
+      const snippets = (resp.data?.web?.results || [])
+        .map(r => r.description).filter(Boolean).slice(0, 3);
+      if (snippets.length) webContext = `\nContext: ${snippets.join(' | ')}`;
     } catch (e) {
-      console.warn('[Comment] Brave Search error:', e.message);
+      console.warn('[Comment] Brave error:', e.message);
     }
   }
 
-  // ── Step 2: DeepSeek generates the comment ────────────────────────────
   try {
-    const coordInfo = lat && lng ? ` at coordinates (${Number(lat).toFixed(4)}, ${Number(lng).toFixed(4)})` : '';
-    const langInstruction = lang === 'fr'
-      ? 'Respond in French. Write 1-2 sentences maximum.'
-      : 'Respond in English. Write 1-2 sentences maximum.';
-
-    const prompt = `You are a geographic expert on African villages.
-${langInstruction}
-Write a SHORT factual comment (1-2 sentences) about the village or place named "${villageName}" in ${country || 'Africa'}${coordInfo}.
-Include: what type of place it is, which administrative area it belongs to, any notable characteristic.
-If the place seems not to exist or is very obscure, say so briefly and suggest what the name might refer to.
-Do NOT invent coordinates or precise population numbers.
-${webContext}
-
-Comment:`;
+    const coordInfo = lat && lng ? ` (${Number(lat).toFixed(4)}, ${Number(lng).toFixed(4)})` : '';
+    const langInstr = lang === 'fr' ? 'En français, 1-2 phrases max.' : 'In English, 1-2 sentences max.';
+    const prompt = `${langInstr} Describe the place "${villageName}" in ${country || 'Africa'}${coordInfo}: type, admin area, notable info. If unknown, say so briefly.${webContext}\n\nComment:`;
 
     const resp = await axios.post(`${baseUrl}/v1/chat/completions`, {
       model: 'deepseek-chat',
       messages: [{ role: 'user', content: prompt }],
-      max_tokens: 120,
+      max_tokens: 100,
       temperature: 0.3,
     }, {
       headers: { Authorization: `Bearer ${deepseekKey}`, 'Content-Type': 'application/json' },
-      timeout: 12000,
+      timeout: 10000,
     });
-
-    const comment = resp.data?.choices?.[0]?.message?.content?.trim();
-    return comment || null;
+    return resp.data?.choices?.[0]?.message?.content?.trim() || null;
   } catch (e) {
     console.warn('[Comment] DeepSeek error:', e.message);
     return null;
   }
 };
 
-// ── Similar village suggestions ────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// 🔍 SUGGESTIONS DE NOMS SIMILAIRES
+// ═══════════════════════════════════════════════════════════════════════════
+
 const suggestSimilarVillages = async (villageName, country = '') => {
   try {
-    const [nominatim, overpass, wikidata] = await Promise.allSettled([
-      searchNominatim(villageName, country),
+    const [nomRes, ovpRes] = await Promise.allSettled([
+      searchNominatim(villageName, country, null, null),
       overpassService.searchVillageGlobal(villageName, null),
-      wikidataService.searchVillage(villageName, country),
     ]);
-
     const all = [
-      ...(nominatim.status === 'fulfilled' ? nominatim.value : []),
-      ...(overpass.status  === 'fulfilled' ? overpass.value  : []),
-      ...(wikidata.status  === 'fulfilled' ? wikidata.value  : []),
+      ...(nomRes.status === 'fulfilled' ? nomRes.value : []),
+      ...(ovpRes.status === 'fulfilled' ? ovpRes.value : []),
     ];
-
-    const suggestions = [...new Set(
+    return [...new Set(
       all.map(r => r.villageName).filter(n => n && n.toLowerCase() !== villageName.toLowerCase())
     )].slice(0, 10);
-
-    return suggestions;
   } catch (e) {
-    console.error('[GeoAgent] suggestSimilarVillages error:', e.message);
+    console.error('[GeoAgent] suggestions error:', e.message);
     return [];
   }
 };
 
-module.exports = { geoAgent, suggestSimilarVillages, generateVillageComment };
+module.exports = { geoAgent, suggestSimilarVillages, generateVillageComment, getCommentFromCache };

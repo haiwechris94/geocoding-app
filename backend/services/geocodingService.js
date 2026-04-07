@@ -393,9 +393,10 @@ const geocodeSingleVillage = async (villageName, filters = {}) => {
   }
 
   // Enrich with GeoAgent (multi-source + AI scoring)
+  // FIX 2 — Pass full filters (incl. refCityLat/Lng/Name) so geoAgent prioritises ref city area
   try {
     const { geoAgent } = require('./geoAgent');
-    const agentResult = await geoAgent(villageName, filters.country || filters.countryCode || '');
+    const agentResult = await geoAgent(villageName, filters.country || filters.countryCode || '', filters);
     if (agentResult && agentResult.found && agentResult.latitude && agentResult.longitude) {
       results.unshift({
         source: agentResult.source || 'GeoAgent (AI)',

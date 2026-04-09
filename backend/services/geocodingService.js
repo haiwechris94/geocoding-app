@@ -508,13 +508,29 @@ const geocodeSingleVillage = async (villageName, filters = {}) => {
   // Sort by confidence score
   scoredResults.sort((a, b) => b.confidence - a.confidence);
 
-  const bestResult = scoredResults[0];
+  // FIX 3 — Filtrer les résultats dont le nom est trop éloigné du village cherché.
+  // Évite de retourner les coordonnées du pays quand le village est introuvable.
+  const validResults = scoredResults.filter(r => {
+    const extracted = extractVillageName(r.formattedAddress);
+    return calculateNameSimilarity(villageName, extracted) >= 0.25;
+  });
+
+  if (validResults.length === 0) {
+    return {
+      villageName,
+      found: false,
+      confidence: 0,
+      message: { en: 'Village not found', fr: 'Village non trouvé' }
+    };
+  }
+
+  const bestResult = validResults[0];
   
   // Get detailed confidence breakdown for the best result
   const confidenceDetails = calculateConfidenceScore(bestResult, villageName, filters, results, true);
   
   // Generate name suggestions if similarity is not 100%
-  const nameSuggestions = generateNameSuggestions(villageName, results, 5);
+  const nameSuggestions = generateNameSuggestions(villageName, validResults, 5);
   
   // Generate formatted address
   const formattedAddressDisplay = formatAddress(bestResult, filters);
@@ -543,7 +559,7 @@ const geocodeSingleVillage = async (villageName, filters = {}) => {
     confidenceLevel: getConfidenceLevel(bestResult.confidence),
     confidenceDetails: confidenceDetails,
     borderProximity: borderProximity,
-    alternativeResults: scoredResults.slice(1, 4), // Top 3 alternatives
+    alternativeResults: validResults.slice(1, 4), // Top 3 alternatives
     filters: filters
   };
   
@@ -591,7 +607,7 @@ const fuzzyMatchVillage = async (villageName, filters) => {
       const bestResult = results[0];
       const similarity = calculateNameSimilarity(villageName, extractVillageName(bestResult.formattedAddress));
       
-      if (similarity >= 0.55) { // At least 55% similar (Option 4: lowered threshold)
+      if (similarity >= 0.45) { // FIX 3 — seuil relevé pour éviter les faux positifs (ex: nom du pays)
         return {
           villageName,
           found: true,
@@ -619,8 +635,8 @@ const fuzzyMatchVillage = async (villageName, filters) => {
     confidence: 0,
     suggestions: variations.slice(0, 3),
     message: {
-      en: 'Village not found, even with fuzzy matching',
-      fr: 'Village non trouvé, même avec correspondance approximative'
+      en: 'Village not found',
+      fr: 'Village non trouvé'
     }
   };
 };

@@ -326,6 +326,40 @@ ${candidates.map((c, i) => `${i}: ${c.villageName} (${c.latitude?.toFixed(4)}, $
   return candidates[0];
 };
 
+// ── Detect country-center coordinates (trop rondes = centroïde pays) ──────
+const isCountryCentroid = (lat, lng) => {
+  const latDec = String(lat).includes('.') ? String(lat).split('.')[1].length : 0;
+  const lngDec = String(lng).includes('.') ? String(lng).split('.')[1].length : 0;
+  return latDec <= 1 && lngDec <= 1;
+};
+
+// ── Noms de pays à rejeter comme résultat de village ─────────────────────
+const COUNTRY_NAMES = new Set([
+  'cameroon','cameroun','nigeria','ghana','senegal','sénégal','mali',
+  'burkina faso','niger','chad','tchad','ivory coast',"côte d'ivoire",
+  'guinea','guinée','togo','benin','bénin','liberia','sierra leone',
+  'gambia','mauritania','mauritanie','gabon','congo','angola','kenya',
+  'ethiopia','éthiopie','tanzania','tanzanie','uganda','ouganda',
+  'mozambique','zambia','zimbabwe','malawi','madagascar','somalia',
+  'sudan','soudan','libya','libye','egypt','égypte','morocco','maroc',
+  'algeria','algérie','tunisia','tunisie','africa','afrique',
+]);
+const isCountryName = (name) => name ? COUNTRY_NAMES.has(name.toLowerCase().trim()) : false;
+
+// ── Filtre anti-résultats pays ─────────────────────────────────────────────
+const filterCountryResults = (candidates) =>
+  candidates.filter(c => {
+    if (isCountryCentroid(c.latitude, c.longitude)) {
+      console.log(`[GeoAgent] Rejeté centroïde: ${c.villageName} [${c.latitude}, ${c.longitude}]`);
+      return false;
+    }
+    if (isCountryName(c.villageName)) {
+      console.log(`[GeoAgent] Rejeté nom pays: ${c.villageName}`);
+      return false;
+    }
+    return true;
+  });
+
 // ═══════════════════════════════════════════════════════════════════════════
 // 🎯 SCORE & RANK
 // ═══════════════════════════════════════════════════════════════════════════
@@ -395,6 +429,8 @@ const geoAgent = async (villageName, country = '', filters = {}) => {
     ...(ovpRes.status === 'fulfilled' ? ovpRes.value : []),
   ].filter(r => r?.latitude && r?.longitude);
 
+  // Rejeter centroïdes pays et noms de pays
+  tier1 = filterCountryResults(tier1);
   let ranked = scoreAndRank(tier1, villageName, refLat, refLng);
 
   console.log(`[GeoAgent] Tier1: ${tier1.length} candidates, ${ranked.length} after filter (${Date.now()-t0}ms)`);
@@ -418,10 +454,10 @@ const geoAgent = async (villageName, country = '', filters = {}) => {
       hasOpenCage   ? searchOpenCage(locationQ, country)   : Promise.resolve([]),
       hasLocationIQ ? searchLocationIQ(locationQ, country) : Promise.resolve([]),
     ]);
-    const tier2 = [
+    const tier2 = filterCountryResults([
       ...(comp1.status === 'fulfilled' ? comp1.value : []),
       ...(comp2.status === 'fulfilled' ? comp2.value : []),
-    ].filter(r => r?.latitude && r?.longitude);
+    ].filter(r => r?.latitude && r?.longitude));
 
     const allCandidates = [...tier1, ...tier2];
     ranked = scoreAndRank(allCandidates, villageName, refLat, refLng);

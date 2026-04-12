@@ -15,7 +15,7 @@ const ResultsTable = ({ results, onEditResult, onDeleteResult, onValidateNameSug
   const [comments, setComments] = useState({});
   const [loadingComments, setLoadingComments] = useState({});
 
-  const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+  const API_BASE = process.env.REACT_APP_API_URL || '/api';
 
   const fetchComment = async (result, index) => {
     if (loadingComments[index]) return;

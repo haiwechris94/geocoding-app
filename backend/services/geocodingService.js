@@ -15,6 +15,10 @@ const { geocodeWithAllAPIs, reverseGeocode } = require('./apiClients');
 const { confidenceWeights, geocodingSettings } = require('../config/apiConfig');
 const { getCountryByCode } = require('../config/countries');
 const { calculateBorderProximity } = require('./proximityService');
+// FIX 3 — require déplacés au niveau module (évite le lookup à chaque appel)
+const turf    = require('@turf/turf');
+const axios   = require('axios');
+const { geoAgent } = require('./geoAgent');
 
 /**
  * Calculate Levenshtein similarity between two strings
@@ -44,7 +48,6 @@ const calculateProximityScore = (result, expectedLocation) => {
     return 0.5; // Neutral score if no expected location
   }
 
-  const turf = require('@turf/turf');
   const from = turf.point([result.longitude, result.latitude]);
   const to = turf.point([expectedLocation.lng, expectedLocation.lat]);
   const distance = turf.distance(from, to, { units: 'kilometers' });
@@ -359,44 +362,83 @@ const geocodeSingleVillage = async (villageName, filters = {}) => {
   // Get results from all APIs (including LocationIQ)
   let results = await geocodeWithAllAPIs(searchQuery, filters);
 
-  // ── LocationIQ ─────────────────────────────────────────────────────────
-  const locationIQKey = process.env.LOCATIONIQ_API_KEY;
-  if (locationIQKey) {
+  // ── FIX 4 — Requête phonétique ─────────────────────────────────────────
+  // Si la forme phonétique normalisée est différente du nom original,
+  // on envoie aussi une requête avec ce nom alternatif aux APIs.
+  // Exemple : "Riyao" → requête supplémentaire avec "riao",
+  // ce qui augmente les chances de trouver le village même si son nom
+  // est orthographié différemment dans les bases de données.
+  const phoneticForm = fuzzyMatchService.normalizePhonetic(villageName);
+  if (phoneticForm && phoneticForm !== villageName.toLowerCase().trim()) {
     try {
-      const liqResp = await require('axios').get('https://us1.locationiq.com/v1/search', {
-        params: {
-          key: locationIQKey,
-          q: searchQuery,
-          format: 'json',
-          limit: 3,
-          addressdetails: 1,
-          countrycodes: filters.countryCode || undefined,
-        },
-        timeout: 10000,
-      });
-      const liqResults = (liqResp.data || []).map(r => ({
-        source: 'LocationIQ',
-        sourceFR: 'LocationIQ',
-        latitude: parseFloat(r.lat),
-        longitude: parseFloat(r.lon),
-        formattedAddress: r.display_name,
-        country: r.address?.country,
-        adminLevel1: r.address?.state,
-        adminLevel2: r.address?.county,
-        adminLevel3: r.address?.suburb || r.address?.village,
-        reliability: 0.82,
-      }));
-      results.push(...liqResults);
-    } catch (liqErr) {
-      console.warn('[LocationIQ] error:', liqErr.message);
+      let phoneticQuery = phoneticForm;
+      if (filters.arrondissement) phoneticQuery += `, ${filters.arrondissement}`;
+      if (filters.department)     phoneticQuery += `, ${filters.department}`;
+      if (filters.region)         phoneticQuery += `, ${filters.region}`;
+      if (filters.country)        phoneticQuery += `, ${filters.country}`;
+      console.log(`[Geocoding] Requête phonétique : "${phoneticForm}" (original: "${villageName}")`);
+      const phoneticResults = await geocodeWithAllAPIs(phoneticQuery, filters);
+      // On n'ajoute que les résultats qui ne sont pas déjà présents (distance > 1km)
+      for (const pr of phoneticResults) {
+        if (!pr || !pr.latitude || !pr.longitude) continue;
+        const isDuplicate = results.some(r =>
+          r.latitude && r.longitude &&
+          calculateDistance(r.latitude, r.longitude, pr.latitude, pr.longitude) < 1
+        );
+        if (!isDuplicate) results.push({ ...pr, phoneticMatch: true });
+      }
+    } catch (phoneticErr) {
+      console.warn('[Geocoding] Phonetic query failed:', phoneticErr.message);
     }
   }
 
-  // Enrich with GeoAgent (multi-source + AI scoring)
-  // FIX 2 — Pass full filters (incl. refCityLat/Lng/Name) so geoAgent prioritises ref city area
-  try {
-    const { geoAgent } = require('./geoAgent');
-    const agentResult = await geoAgent(villageName, filters.country || filters.countryCode || '', filters);
+  // ── LocationIQ + GeoAgent en parallèle ────────────────────────────────
+  // FIX 3 — Les deux appels sont maintenant lancés en parallèle via Promise.allSettled.
+  // Avant : séquentiels → +8–12s. Maintenant : simultanés → temps = max(LIQ, Agent).
+  const locationIQKey = process.env.LOCATIONIQ_API_KEY;
+
+  const [liqSettled, agentSettled] = await Promise.allSettled([
+    // LocationIQ
+    locationIQKey
+      ? axios.get('https://us1.locationiq.com/v1/search', {
+          params: {
+            key: locationIQKey,
+            q: searchQuery,
+            format: 'json',
+            limit: 3,
+            addressdetails: 1,
+            countrycodes: filters.countryCode || undefined,
+          },
+          timeout: 5000, // FIX 1 — aligné sur le timeout global réduit
+        }).then(liqResp => (liqResp.data || []).map(r => ({
+            source: 'LocationIQ',
+            sourceFR: 'LocationIQ',
+            latitude: parseFloat(r.lat),
+            longitude: parseFloat(r.lon),
+            formattedAddress: r.display_name,
+            country: r.address?.country,
+            adminLevel1: r.address?.state,
+            adminLevel2: r.address?.county,
+            adminLevel3: r.address?.suburb || r.address?.village,
+            reliability: 0.82,
+          })))
+      : Promise.resolve([]),
+
+    // GeoAgent — FIX 2 — Passe les filtres complets (incl. refCityLat/Lng/Name)
+    geoAgent(villageName, filters.country || filters.countryCode || '', filters)
+      .catch(err => { console.warn('[GeoAgent] error:', err.message); return null; }),
+  ]);
+
+  // Intégrer les résultats LocationIQ
+  if (liqSettled.status === 'fulfilled' && Array.isArray(liqSettled.value)) {
+    results.push(...liqSettled.value);
+  } else if (liqSettled.status === 'rejected') {
+    console.warn('[LocationIQ] error:', liqSettled.reason?.message);
+  }
+
+  // Intégrer le résultat GeoAgent
+  if (agentSettled.status === 'fulfilled') {
+    const agentResult = agentSettled.value;
     if (agentResult && agentResult.found && agentResult.latitude && agentResult.longitude) {
       results.unshift({
         source: agentResult.source || 'GeoAgent (AI)',
@@ -412,8 +454,6 @@ const geocodeSingleVillage = async (villageName, filters = {}) => {
         raw: agentResult
       });
     }
-  } catch (agentErr) {
-    console.warn('[GeocodingService] GeoAgent enrichment failed:', agentErr.message);
   }
 
   // ── Geographic boundary filtering ──────────────────────────────────────

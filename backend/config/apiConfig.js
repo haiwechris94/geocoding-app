@@ -208,13 +208,17 @@ const geocodingSettings = {
   maxResultsPerQuery: 5,
   
   // Timeout for API requests (ms)
-  apiTimeout: 15000,
+  // FIX 1 — Réduit de 15 000 à 5 000 ms : les bonnes APIs répondent en < 2s,
+  // attendre 15s ralentit massivement les requêtes vers des serveurs distants.
+  apiTimeout: 5000,
   
   // Overall timeout for a single geocode operation on the backend (ms)
-  geocodeSingleTimeout: 90000,
+  // FIX 1 — Réduit de 90 000 à 30 000 ms
+  geocodeSingleTimeout: 30000,
   
   // Delay between batch requests (ms) to respect rate limits
-  batchDelay: 500,
+  // FIX 1 — Réduit de 500 à 200 ms
+  batchDelay: 200,
   
   // Maximum concurrent API requests
   maxConcurrentRequests: 5,

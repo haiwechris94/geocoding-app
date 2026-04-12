@@ -334,21 +334,62 @@ const searchHDX = async (query, filters = {}) => {
  * @param {Object} filters - Geographic filters
  * @returns {Promise<Array>} Array of results from all APIs
  */
-const geocodeWithAllAPIs = async (query, filters = {}) => {
-  const overpassService = require('./overpassService');
-  const wikidataService = require('./wikidataService');
-  const braveSearchService = require('./braveSearchService');
-  // Extract village name and country from query/filters
-  const villageName = query.split(',')[0].trim();
-  const country = filters.country || filters.countryCode || '';
+/**
+ * Helper — flatten Promise.allSettled results (single object or array)
+ * Aplatit les résultats de Promise.allSettled (objet unique ou tableau)
+ */
+const flattenSettled = (settled) => {
+  const out = [];
+  for (const r of settled) {
+    if (r.status === 'fulfilled' && r.value !== null) {
+      if (Array.isArray(r.value)) {
+        out.push(...r.value.filter(Boolean));
+      } else {
+        out.push(r.value);
+      }
+    }
+  }
+  return out;
+};
 
-  const promises = [
+/**
+ * Geocode using all available APIs — architecture 2 tiers
+ * FIX 2 — Wikidata et Overpass isolés en Tier 2 : ils ne sont appelés que si
+ * le Tier 1 (APIs rapides) ne retourne pas de résultat de haute fiabilité (>= 0.85).
+ * Cela évite d'attendre 4–8s supplémentaires à chaque requête.
+ *
+ * @param {string} query - Village name to geocode
+ * @param {Object} filters - Geographic filters
+ * @returns {Promise<Array>} Array of results from all APIs
+ */
+const geocodeWithAllAPIs = async (query, filters = {}) => {
+  const overpassService    = require('./overpassService');
+  const wikidataService    = require('./wikidataService');
+  const braveSearchService = require('./braveSearchService');
+
+  const villageName = query.split(',')[0].trim();
+  const country     = filters.country || filters.countryCode || '';
+
+  // ── TIER 1 — APIs rapides, toujours appelées en parallèle ──────────────
+  const tier1Settled = await Promise.allSettled([
     geocodeWithGoogle(query, filters),
     geocodeWithGeoNames(query, filters),
     geocodeWithNominatim(query, filters),
     geocodeWithPhoton(query, filters),
     geocodeWithOpenCage(query, filters),
-    // New sources
+  ]);
+  const tier1Results = flattenSettled(tier1Settled);
+
+  // Early exit : si au moins un résultat haute fiabilité (>= 0.85), pas besoin du Tier 2
+  const hasHighConfidence = tier1Results.some(r => r && r.reliability >= 0.85);
+  if (hasHighConfidence) {
+    console.log('[API] Early exit Tier 1 — résultat haute fiabilité trouvé');
+    return tier1Results;
+  }
+
+  // ── TIER 2 — APIs lentes, uniquement si Tier 1 insuffisant ─────────────
+  console.log('[API] Tier 1 insuffisant — appel Tier 2 (Overpass, Wikidata, Brave)');
+  const tier2Settled = await Promise.allSettled([
     overpassService.searchVillageGlobal(villageName, filters.countryCode || null)
       .then(results => results.map(r => ({
         source: r.source,
@@ -382,22 +423,9 @@ const geocodeWithAllAPIs = async (query, filters = {}) => {
         reliability: 0.65,
         raw: r
       }))).catch(() => []),
-  ];
+  ]);
 
-  const settled = await Promise.allSettled(promises);
-  
-  // Flatten results (some sources return arrays, others single objects)
-  const allResults = [];
-  for (const r of settled) {
-    if (r.status === 'fulfilled' && r.value !== null) {
-      if (Array.isArray(r.value)) {
-        allResults.push(...r.value.filter(Boolean));
-      } else {
-        allResults.push(r.value);
-      }
-    }
-  }
-  return allResults;
+  return [...tier1Results, ...flattenSettled(tier2Settled)];
 };
 
 // ===========================================

@@ -13,7 +13,7 @@ import React, { useState, useCallback } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import './ReportBuilder.css';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL || '/api';
 
 const ReportBuilder = ({ data = [], onClose }) => {
   const { language } = useLanguage();

@@ -433,7 +433,7 @@ console.log(result.data);`
     });
 
     try {
-      const url = `http://localhost:5000${endpoint.path}`;
+      const url = endpoint.path;
       const options = {
         method: endpoint.method,
         headers: {
@@ -549,7 +549,7 @@ console.log(result.data);`
             
             <div className="info-card">
               <h3>{text.baseUrl}</h3>
-              <code className="base-url">http://localhost:5000/api</code>
+              <code className="base-url">/api</code>
             </div>
 
             <div className="overview-grid">

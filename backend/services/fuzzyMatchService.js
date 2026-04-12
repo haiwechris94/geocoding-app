@@ -289,8 +289,10 @@ class FuzzyMatchService {
   }
 
   /**
-   * Calculate combined similarity: 50% Levenshtein + 50% phonetic
-   * Phonetic weight increased (from 40%) since normalizePhonetic improves African name matching
+   * Calculate combined similarity: 40% Levenshtein + 60% phonetic
+   * FIX 5 — Poids phonétique augmenté de 50% à 60% pour mieux gérer les noms
+   * africains et français où la phonétique est plus fiable que l'orthographe.
+   * Exemple : "Riyao" et "Riao" → score phonétique élevé même si Levenshtein partiel.
    * @param {string} name1 - First name
    * @param {string} name2 - Second name
    * @returns {number} Combined similarity score (0-1)
@@ -298,7 +300,7 @@ class FuzzyMatchService {
   combinedSimilarity(name1, name2) {
     const levenshteinScore = this.calculateSimilarity(name1, name2);
     const phoneticScore = this.phoneticSimilarity(name1, name2);
-    return (levenshteinScore * 0.5) + (phoneticScore * 0.5);
+    return (levenshteinScore * 0.40) + (phoneticScore * 0.60);
   }
 }
 

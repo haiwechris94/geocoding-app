@@ -1,6 +1,10 @@
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+// In development the CRA proxy (package.json "proxy": "http://localhost:5000")
+// forwards /api/* requests to the local backend, so a relative base path is
+// all that is needed. In production, set REACT_APP_API_URL to the deployed
+// backend origin (e.g. https://geocoding-app.onrender.com/api).
+const API_BASE_URL = process.env.REACT_APP_API_URL || '/api';
 
 // Create axios instance
 const api = axios.create({

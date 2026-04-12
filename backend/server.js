@@ -34,27 +34,56 @@ app.use(helmet({
 }));
 
 // CORS configuration / Configuration CORS
+// ---------------------------------------------------------------------------
+// Build the allowed-origins list from hard-coded values + optional env vars.
+// FRONTEND_URL  – primary override (set this on Render to the Vercel URL)
+// EXTRA_ORIGINS – comma-separated list of any additional origins to allow
+// ---------------------------------------------------------------------------
 const allowedOrigins = [
   'http://localhost:3000',
+  'http://localhost:3001',
+  'http://localhost:5173', // Vite dev server
   'https://geocoding-app-three.vercel.app',
-  process.env.FRONTEND_URL,
-].filter(Boolean);
+];
+
+// Accept additional origins from environment variables
+if (process.env.FRONTEND_URL) {
+  const envUrl = process.env.FRONTEND_URL.trim().replace(/\/$/, ''); // strip trailing slash
+  if (!allowedOrigins.includes(envUrl)) allowedOrigins.push(envUrl);
+}
+if (process.env.EXTRA_ORIGINS) {
+  process.env.EXTRA_ORIGINS.split(',').forEach(function (o) {
+    const trimmed = o.trim().replace(/\/$/, '');
+    if (trimmed && !allowedOrigins.includes(trimmed)) allowedOrigins.push(trimmed);
+  });
+}
 
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (mobile apps, curl, etc.)
+    // Allow requests with no origin (server-to-server, curl, Postman, mobile apps)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
+    // Normalise: strip trailing slash before comparing
+    const normOrigin = origin.replace(/\/$/, '');
+    if (allowedOrigins.indexOf(normOrigin) !== -1) {
+      callback(null, normOrigin); // echo the exact origin back (required with credentials:true)
     } else {
-      callback(new Error('Not allowed by CORS'));
+      console.warn('[CORS] Blocked origin:', origin);
+      callback(null, false); // reject silently — do NOT throw, which would swallow CORS headers
     }
   },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept-Language'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept-Language', 'X-Requested-With'],
+  exposedHeaders: ['Content-Disposition'], // needed for file-download responses
   credentials: true,
-  maxAge: 86400 // 24 hours
+  optionsSuccessStatus: 204, // some legacy browsers choke on 204 vs 200 — 204 is correct for preflight
+  maxAge: 86400 // cache preflight for 24 hours
 };
+
+// Handle ALL preflight OPTIONS requests BEFORE any other middleware (helmet, rate-limiter, etc.)
+// This is the most common reason CORS headers are missing on preflight responses.
+app.options('*', cors(corsOptions));
+
+// Apply CORS to all other requests
 app.use(cors(corsOptions));
 
 // Request logging / Journalisation des requêtes

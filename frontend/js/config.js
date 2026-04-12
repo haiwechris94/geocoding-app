@@ -2,8 +2,10 @@
  * Configuration for the Village Geocoding Application
  */
 const CONFIG = {
-  // API Base URL - change this if your backend runs on a different port
-  API_BASE_URL: 'http://localhost:3000/api',
+  // API Base URL - relative path so the CRA dev proxy (package.json "proxy")
+  // forwards requests to the local backend. Override with an absolute URL
+  // (e.g. https://geocoding-app.onrender.com/api) for production builds.
+  API_BASE_URL: '/api',
   
   // Default map center (Cameroon)
   DEFAULT_MAP_CENTER: {

@@ -10,7 +10,7 @@ const VillageComment = ({ result, language = 'fr' }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
 
-  const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+  const API_BASE = process.env.REACT_APP_API_URL || '/api';
 
   const fetchComment = async () => {
     if (loading || comment) return;

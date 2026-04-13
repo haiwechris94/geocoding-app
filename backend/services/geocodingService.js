@@ -69,11 +69,13 @@ const calculateProximityScore = (result, expectedLocation) => {
  * @returns {Object} Confidence score and optional details
  */
 const calculateConfidenceScore = (result, originalQuery, filters, allResults, includeDetails = false) => {
-  // 1. Source reliability score
+  // 1. Source reliability — conservé en info uniquement, retiré du calcul
+  // FIX — La fiabilité de la source API ne reflète pas la précision des coordonnées.
+  // Elle reste disponible dans le breakdown pour information, mais son poids est 0.
   const sourceScore = result.reliability || 0.5;
   const sourceExplanation = {
-    en: `Source "${result.source}" has a reliability rating of ${Math.round(sourceScore * 100)}%`,
-    fr: `La source "${result.source}" a un indice de fiabilité de ${Math.round(sourceScore * 100)}%`
+    en: `Source "${result.source}" has a reliability rating of ${Math.round(sourceScore * 100)}% (informational only — not included in confidence score)`,
+    fr: `La source "${result.source}" a un indice de fiabilité de ${Math.round(sourceScore * 100)}% (informatif uniquement — non inclus dans le score de confiance)`
   };
 
   // 2. Name similarity score
@@ -97,7 +99,7 @@ const calculateConfidenceScore = (result, originalQuery, filters, allResults, in
     proximityScore = calculateProximityScore(result, refLocation);
     const distanceKm = calculateDistance(result.latitude, result.longitude, refLocation.lat, refLocation.lng);
     const cityName = filters.refCityName || filters.refCityDisplay || 'la ville de référence';
-    proximityScore = Math.max(0, 1 - (distanceKm / 500)); // max 500km for city-level
+    proximityScore = Math.max(0, 1 - (distanceKm / 500));
     proximityExplanation = {
       en: `Result is ${Math.round(distanceKm)}km from reference city "${cityName}". Proximity score: ${Math.round(proximityScore * 100)}%`,
       fr: `Le résultat est à ${Math.round(distanceKm)}km de la ville de référence "${cityName}". Score de proximité: ${Math.round(proximityScore * 100)}%`
@@ -143,12 +145,12 @@ const calculateConfidenceScore = (result, originalQuery, filters, allResults, in
       : 'Aucune autre source n\'a confirmé cette localisation exacte'
   };
 
-  // Calculate weighted score
+  // FIX — Calcul sans sourceReliability (poids = 0).
+  // Score = 55% similarité nom + 30% proximité géo + 15% consensus sources
   const confidence = 
-    (sourceScore * confidenceWeights.sourceReliability) +
-    (nameSimilarity * confidenceWeights.nameSimilarity) +
-    (proximityScore * confidenceWeights.geographicProximity) +
-    (consistencyScore * confidenceWeights.resultConsistency);
+    (nameSimilarity    * confidenceWeights.nameSimilarity) +
+    (proximityScore    * confidenceWeights.geographicProximity) +
+    (consistencyScore  * confidenceWeights.resultConsistency);
 
   const finalScore = Math.round(confidence * 100) / 100;
 
@@ -163,10 +165,11 @@ const calculateConfidenceScore = (result, originalQuery, filters, allResults, in
     breakdown: {
       sourceReliability: {
         score: Math.round(sourceScore * 100) / 100,
-        weight: confidenceWeights.sourceReliability,
-        weightedScore: Math.round(sourceScore * confidenceWeights.sourceReliability * 100) / 100,
+        weight: 0,
+        weightedScore: 0,
         explanation: sourceExplanation,
-        source: result.source
+        source: result.source,
+        informationalOnly: true
       },
       nameSimilarity: {
         score: Math.round(nameSimilarity * 100) / 100,
@@ -232,7 +235,8 @@ const generateNameSuggestions = (originalName, allResults, maxSuggestions = 5) =
         similarity: Math.round(similarity * 100) / 100,
         levenshteinDistance: distance,
         source: result.source,
-        confidence: Math.round((similarity * (result.reliability || 0.5)) * 100) / 100,
+        // FIX — confidence = similarité seule, sans pondération par la fiabilité source
+        confidence: Math.round(similarity * 100) / 100,
         coordinates: {
           latitude: result.latitude,
           longitude: result.longitude
@@ -550,9 +554,33 @@ const geocodeSingleVillage = async (villageName, filters = {}) => {
 
   // FIX 3 — Filtrer les résultats dont le nom est trop éloigné du village cherché.
   // Évite de retourner les coordonnées du pays quand le village est introuvable.
+  // FIX BUG 1 — Seuil relevé de 0.25 à 0.35 (évite le cas frontière exact
+  // ex: "Yeamo Town" vs "Sierra Leone" = 0.250 qui passait à l'ancienne valeur).
+  // FIX BUG 1 — Rejet des coordonnées de centroïde de pays (≤ 1 décimale)
+  // directement ici, en plus du filtre déjà présent dans geoAgent.js.
+  // FIX BUG 2 — Si une ville de référence est définie, le seuil est porté à 0.40
+  // pour éviter que la proximité de la refCity ne fasse passer un résultat sans
+  // rapport avec le village cherché (ex: "hbcjhds" → Lagdo).
+  const minNameSim = (filters.refCityLat && filters.refCityLng) ? 0.40 : 0.35;
+
   const validResults = scoredResults.filter(r => {
     const extracted = extractVillageName(r.formattedAddress);
-    return calculateNameSimilarity(villageName, extracted) >= 0.25;
+    const nameSim = calculateNameSimilarity(villageName, extracted);
+
+    if (nameSim < minNameSim) {
+      console.warn(`[Geocoding] Rejeté (sim ${nameSim.toFixed(2)} < ${minNameSim}): "${extracted}" pour "${villageName}"`);
+      return false;
+    }
+
+    // Rejeter les coordonnées de centroïde pays (≤ 1 décimale)
+    const latDec = String(r.latitude).split('.')[1]?.length ?? 0;
+    const lngDec = String(r.longitude).split('.')[1]?.length ?? 0;
+    if (latDec <= 1 && lngDec <= 1) {
+      console.warn(`[Geocoding] Centroïde pays rejeté: ${r.formattedAddress} [${r.latitude}, ${r.longitude}]`);
+      return false;
+    }
+
+    return true;
   });
 
   if (validResults.length === 0) {
@@ -658,8 +686,9 @@ const fuzzyMatchVillage = async (villageName, filters) => {
           formattedAddress: bestResult.formattedAddress,
           source: bestResult.source,
           sourceFR: bestResult.sourceFR,
-          confidence: similarity * bestResult.reliability,
-          confidenceLevel: getConfidenceLevel(similarity * bestResult.reliability),
+          // FIX — confidence basée sur la similarité du nom uniquement, sans reliability source
+          confidence: Math.round(similarity * 100) / 100,
+          confidenceLevel: getConfidenceLevel(similarity),
           message: {
             en: `Fuzzy match found: "${extractVillageName(bestResult.formattedAddress)}"`,
             fr: `Correspondance approximative trouvée: "${extractVillageName(bestResult.formattedAddress)}"`

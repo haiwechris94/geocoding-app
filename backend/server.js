@@ -17,9 +17,14 @@ const fs = require('fs');
 
 // Import routes / Importer les routes
 const geocodingRoutes = require('./routes/geocoding');
-const villagesRoutes = require('./routes/villages');
-const filtersRoutes = require('./routes/filters');
-const exportRoutes = require('./routes/export');
+const villagesRoutes  = require('./routes/villages');
+const filtersRoutes   = require('./routes/filters');
+const exportRoutes    = require('./routes/export');
+// QUALITÉ 4 — Routes search et upload montées (elles existaient mais n'étaient pas importées)
+const searchRoutes    = require('./routes/search');
+const uploadRoutes    = require('./routes/upload');
+// QUALITÉ 2 — Import du middleware centralisé (supprime le doublon inline)
+const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -138,9 +143,12 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // ===========================================
 
 app.use('/api/geocoding', geocodingRoutes);
-app.use('/api/villages', villagesRoutes);
-app.use('/api/filters', filtersRoutes);
-app.use('/api/export', exportRoutes);
+app.use('/api/villages',  villagesRoutes);
+app.use('/api/filters',   filtersRoutes);
+app.use('/api/export',    exportRoutes);
+// QUALITÉ 4 — Routes désormais actives (étaient définies mais jamais montées)
+app.use('/api/search',    searchRoutes);
+app.use('/api/upload',    uploadRoutes);
 
 // ===========================================
 // Geocoding Sources Status / Statut des Sources de Géocodage
@@ -527,68 +535,10 @@ app.get('/api/ai-suggest', async (req, res) => {
 // ===========================================
 // Error Handling Middleware / Middleware de Gestion des Erreurs
 // ===========================================
-
-// 404 Handler / Gestionnaire 404
-app.use((req, res, next) => {
-  res.status(404).json({
-    success: false,
-    error: {
-      code: 'NOT_FOUND',
-      message: {
-        en: `Route ${req.originalUrl} not found`,
-        fr: `Route ${req.originalUrl} non trouvée`
-      }
-    }
-  });
-});
-
-// Global error handler / Gestionnaire d'erreurs global
-app.use((err, req, res, next) => {
-  console.error('Error:', err);
-
-  // Multer file size error / Erreur de taille de fichier Multer
-  if (err.code === 'LIMIT_FILE_SIZE') {
-    return res.status(413).json({
-      success: false,
-      error: {
-        code: 'FILE_TOO_LARGE',
-        message: {
-          en: 'File size exceeds the maximum limit',
-          fr: 'La taille du fichier dépasse la limite maximale'
-        }
-      }
-    });
-  }
-
-  // Validation error / Erreur de validation
-  if (err.name === 'ValidationError') {
-    return res.status(400).json({
-      success: false,
-      error: {
-        code: 'VALIDATION_ERROR',
-        message: {
-          en: err.message,
-          fr: 'Erreur de validation des données'
-        },
-        details: err.details || []
-      }
-    });
-  }
-
-  // Default error response / Réponse d'erreur par défaut
-  const statusCode = err.statusCode || 500;
-  res.status(statusCode).json({
-    success: false,
-    error: {
-      code: err.code || 'INTERNAL_ERROR',
-      message: {
-        en: statusCode === 500 ? 'Internal server error' : err.message,
-        fr: statusCode === 500 ? 'Erreur interne du serveur' : err.message
-      },
-      ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
-    }
-  });
-});
+// QUALITÉ 2 — Remplacement des handlers inline par le middleware centralisé
+// de middleware/errorHandler.js, plus complet (monitoring, i18n, classes d'erreur).
+app.use(notFoundHandler);
+app.use(errorHandler);
 
 // ===========================================
 // Server Startup / Démarrage du Serveur

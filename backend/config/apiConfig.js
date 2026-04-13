@@ -187,11 +187,18 @@ const apiConfig = {
 // ===========================================
 // Confidence Score Weights
 // ===========================================
+// FIX — sourceReliability supprimé du calcul de confiance.
+// Le score de confiance mesure la certitude sur les COORDONNÉES du village,
+// pas la qualité de la source API. Les poids sont redistribués sur les 3
+// critères qui reflètent réellement la précision géographique :
+//   • nameSimilarity      : le nom trouvé correspond-il au village cherché ?
+//   • geographicProximity : les coordonnées sont-elles dans la bonne zone ?
+//   • resultConsistency   : plusieurs sources confirment-elles le même point ?
 const confidenceWeights = {
-  sourceReliability: 0.30,    // Weight for API source reliability
-  nameSimilarity: 0.35,       // Weight for name matching (Levenshtein)
-  geographicProximity: 0.25,  // Weight for proximity to expected location
-  resultConsistency: 0.10    // Weight for consistency across multiple sources
+  sourceReliability: 0,        // Supprimé — ne reflète pas la précision des coordonnées
+  nameSimilarity: 0.55,        // Critère principal : correspondance du nom (était 0.35)
+  geographicProximity: 0.30,   // Zone géographique cohérente (était 0.25)
+  resultConsistency: 0.15      // Consensus multi-sources (était 0.10)
 };
 
 // ===========================================

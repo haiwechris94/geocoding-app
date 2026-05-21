@@ -170,6 +170,20 @@ const apiConfig = {
   },
 
   // ===========================================
+  // HERE Geocoding & Search API
+  // ===========================================
+  here: {
+    baseUrl: 'https://geocode.search.hereapi.com/v1/geocode',
+    enabled: !!process.env.HERE_API_KEY,
+    apiKey: process.env.HERE_API_KEY,
+    rateLimit: {
+      requestsPerDay: 250000 // Free tier (Base Plan)
+    },
+    reliability: 0.87,
+    priority: 2 // Tier 1 — between GeoNames (0.85) and Overpass (0.88)
+  },
+
+  // ===========================================
   // Brave Search API
   // ===========================================
   braveSearch: {

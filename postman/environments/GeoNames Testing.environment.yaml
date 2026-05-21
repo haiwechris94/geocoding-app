@@ -8,3 +8,8 @@ values:
     value: BSANVQdxSNUHY0UB8-cShRuqtRNRo8S
     enabled: true
     type: default
+  - key: HERE_API_KEY
+    value: rdC2CmVui3igtFZia9K7ZEM_VhEWU51ztqEhlp3WtWk
+    enabled: true
+    type: secret
+    description: 'HERE Geocoding & Search API key. Get yours free at https://developer.here.com (250,000 requests/month on the Base Plan).'

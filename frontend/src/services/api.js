@@ -174,11 +174,15 @@ export const filtersAPI = {
 // Export API
 // ==========================================
 
+// Longer timeout for export endpoints — file generation can be slow on cold starts
+const EXPORT_TIMEOUT = 90000; // 90 seconds
+
 export const exportAPI = {
   // Export to Excel
   exportToExcel: async (results, filters) => {
     const response = await api.post('/export/excel', { results, filters }, {
-      responseType: 'blob'
+      responseType: 'blob',
+      timeout: EXPORT_TIMEOUT
     });
     return response;
   },
@@ -186,7 +190,8 @@ export const exportAPI = {
   // Export to CSV
   exportToCSV: async (results, filters) => {
     const response = await api.post('/export/csv', { results, filters }, {
-      responseType: 'blob'
+      responseType: 'blob',
+      timeout: EXPORT_TIMEOUT
     });
     return response;
   },
@@ -194,7 +199,8 @@ export const exportAPI = {
   // Export to PDF
   exportToPDF: async (results, filters) => {
     const response = await api.post('/export/pdf', { results, filters }, {
-      responseType: 'blob'
+      responseType: 'blob',
+      timeout: EXPORT_TIMEOUT
     });
     return response;
   },

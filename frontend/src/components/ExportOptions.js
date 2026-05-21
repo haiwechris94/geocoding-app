@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { exportAPI } from '../services/api';
 import { toast } from 'react-toastify';
@@ -6,6 +6,7 @@ import './ExportOptions.css';
 
 const ExportOptions = ({ results, filters, disabled }) => {
   const { t } = useLanguage();
+  const [loadingFormat, setLoadingFormat] = useState(null);
 
   const handleExport = async (format) => {
     if (!results || results.length === 0) {
@@ -13,6 +14,7 @@ const ExportOptions = ({ results, filters, disabled }) => {
       return;
     }
 
+    setLoadingFormat(format);
     try {
       let response;
       let filename;
@@ -47,9 +49,19 @@ const ExportOptions = ({ results, filters, disabled }) => {
       toast.success(t('messages.exportSuccess'));
     } catch (error) {
       console.error('Export error:', error);
-      toast.error(t('messages.exportError'));
+      if (error.response && error.response.status === 429) {
+        toast.error(t('messages.exportRateLimit') || 'Too many export requests. Please wait a moment and try again.');
+      } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        toast.error(t('messages.exportTimeout') || 'Export timed out. The file may be too large — try filtering your results first.');
+      } else {
+        toast.error(t('messages.exportError'));
+      }
+    } finally {
+      setLoadingFormat(null);
     }
   };
+
+  const isExporting = loadingFormat !== null;
 
   return (
     <div className="export-options">
@@ -58,26 +70,26 @@ const ExportOptions = ({ results, filters, disabled }) => {
         <button
           className="export-btn excel"
           onClick={() => handleExport('excel')}
-          disabled={disabled}
+          disabled={disabled || isExporting}
         >
-          <span className="export-icon">📊</span>
-          <span>{t('results.export.excel')}</span>
+          <span className="export-icon">{loadingFormat === 'excel' ? '⏳' : '📊'}</span>
+          <span>{loadingFormat === 'excel' ? t('results.export.exporting') || 'Exporting…' : t('results.export.excel')}</span>
         </button>
         <button
           className="export-btn csv"
           onClick={() => handleExport('csv')}
-          disabled={disabled}
+          disabled={disabled || isExporting}
         >
-          <span className="export-icon">📄</span>
-          <span>{t('results.export.csv')}</span>
+          <span className="export-icon">{loadingFormat === 'csv' ? '⏳' : '📄'}</span>
+          <span>{loadingFormat === 'csv' ? t('results.export.exporting') || 'Exporting…' : t('results.export.csv')}</span>
         </button>
         <button
           className="export-btn pdf"
           onClick={() => handleExport('pdf')}
-          disabled={disabled}
+          disabled={disabled || isExporting}
         >
-          <span className="export-icon">📕</span>
-          <span>{t('results.export.pdf')}</span>
+          <span className="export-icon">{loadingFormat === 'pdf' ? '⏳' : '📕'}</span>
+          <span>{loadingFormat === 'pdf' ? t('results.export.exporting') || 'Exporting…' : t('results.export.pdf')}</span>
         </button>
       </div>
     </div>

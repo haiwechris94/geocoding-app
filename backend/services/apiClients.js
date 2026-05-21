@@ -9,6 +9,7 @@
 const axios = require('axios');
 const { apiConfig, geocodingSettings } = require('../config/apiConfig');
 const opencageService = require('./opencageService');
+const hereService     = require('./hereService');
 
 /**
  * Create axios instance with timeout
@@ -377,6 +378,7 @@ const geocodeWithAllAPIs = async (query, filters = {}) => {
     geocodeWithNominatim(query, filters),
     geocodeWithPhoton(query, filters),
     geocodeWithOpenCage(query, filters),
+    geocodeWithHERE(query, filters),
   ]);
   const tier1Results = flattenSettled(tier1Settled);
 
@@ -517,12 +519,54 @@ const reverseGeocode = async (lat, lng) => {
   }
 };
 
+// ===========================================
+// HERE Geocoding API Client
+// ===========================================
+
+/**
+ * Geocode using HERE Geocoding & Search API
+ * Géocoder avec l'API HERE Geocoding & Search
+ *
+ * @param {string} query   - Village name to geocode
+ * @param {Object} filters - Geographic filters (country, countryCode, …)
+ * @returns {Promise<Object|null>} Best geocoding result or null
+ */
+const geocodeWithHERE = async (query, filters = {}) => {
+  if (!hereService.isEnabled()) return null;
+
+  try {
+    const results = await hereService.geocode(query, filters, filters.language || 'en');
+    if (!results || results.length === 0) return null;
+
+    // Return the best result (highest confidence)
+    const best = results.reduce((a, b) => (b.confidence > a.confidence ? b : a), results[0]);
+    return {
+      source:           best.source,
+      sourceFR:         best.sourceFR,
+      latitude:         best.latitude,
+      longitude:        best.longitude,
+      formattedAddress: best.formattedAddress,
+      country:          best.country,
+      countryCode:      best.countryCode,
+      region:           best.region,
+      department:       best.department,
+      confidence:       best.confidence,
+      reliability:      best.reliability,
+      raw:              best.raw
+    };
+  } catch (error) {
+    console.error('[HERE] apiClients wrapper error:', error.message);
+    return null;
+  }
+};
+
 module.exports = {
   geocodeWithGoogle,
   geocodeWithGeoNames,
   geocodeWithNominatim,
   geocodeWithPhoton,
   geocodeWithOpenCage,
+  geocodeWithHERE,
   searchHDX,
   geocodeWithAllAPIs,
   reverseGeocode

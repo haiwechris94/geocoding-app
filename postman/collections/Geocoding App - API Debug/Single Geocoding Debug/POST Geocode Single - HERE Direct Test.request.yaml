@@ -1,0 +1,138 @@
+$kind: http-request
+name: POST Geocode Single - HERE Direct Test
+method: POST
+url: 'https://geocode.search.hereapi.com/v1/geocode'
+order: 5000
+headers:
+  - key: Accept
+    value: application/json
+params:
+  - key: q
+    value: '{{village}}'
+    description: Village or place name to geocode
+  - key: apiKey
+    value: '{{HERE_API_KEY}}'
+    description: HERE API key (set in GeoNames Testing environment)
+  - key: in
+    value: 'countryCode:TCD'
+    description: 'ISO-3166-1 alpha-3 country code filter. Examples: TCD (Chad), NGA (Nigeria), COD (DRC), CMR (Cameroon), MLI (Mali)'
+  - key: limit
+    value: '5'
+    description: Max number of results to return
+  - key: lang
+    value: en
+    description: Language for result labels
+  - key: show
+    value: countryInfo
+    description: Include extended country information in results
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      // ─── HERE Geocoding Direct Test ───────────────────────────────────────────
+      // Tests the HERE Geocoding & Search API directly (bypasses the app backend).
+      // Useful to verify your HERE_API_KEY and check raw result quality for
+      // African village names before enabling HERE in the full geocoding pipeline.
+      //
+      // Environment variables required:
+      //   village       — name of the village to search (e.g. "Moundou")
+      //   HERE_API_KEY  — your HERE API key
+
+      const status = pm.response.code;
+      const body   = pm.response.text();
+
+      // ── 1. Basic HTTP checks ──────────────────────────────────────────────────
+      pm.test("HTTP 200 OK", () => {
+        pm.expect(status).to.equal(200,
+          `HERE API returned ${status}. Check HERE_API_KEY in the environment.\nBody: ${body.substring(0, 300)}`
+        );
+      });
+
+      pm.test("Response is valid JSON", () => {
+        pm.expect(() => pm.response.json()).to.not.throw();
+      });
+
+      if (status !== 200) {
+        console.error("[HERE] Non-200 response:", status, body.substring(0, 500));
+        return;
+      }
+
+      const json  = pm.response.json();
+      const items = json.items || [];
+
+      // ── 2. Result presence ────────────────────────────────────────────────────
+      pm.test("At least one result returned", () => {
+        pm.expect(items.length).to.be.greaterThan(0,
+          "HERE returned 0 results. Try a larger city or remove the 'in' country filter."
+        );
+      });
+
+      if (items.length === 0) return;
+
+      const best = items[0];
+
+      // ── 3. Coordinate validity ────────────────────────────────────────────────
+      pm.test("Best result has valid coordinates", () => {
+        pm.expect(best.position).to.be.an('object');
+        pm.expect(best.position.lat).to.be.a('number');
+        pm.expect(best.position.lng).to.be.a('number');
+        pm.expect(best.position.lat).to.be.within(-90, 90);
+        pm.expect(best.position.lng).to.be.within(-180, 180);
+      });
+
+      // ── 4. Confidence / scoring ───────────────────────────────────────────────
+      pm.test("Scoring object present", () => {
+        pm.expect(best.scoring).to.be.an('object');
+      });
+
+      const queryScore = best.scoring?.queryScore ?? null;
+      pm.test("Query score >= 0.55 (minimum usable confidence)", () => {
+        if (queryScore !== null) {
+          pm.expect(queryScore).to.be.at.least(0.55,
+            `Low confidence (${queryScore}). Result may need field verification.`
+          );
+        } else {
+          console.warn("[HERE] No queryScore in response — using resultType fallback.");
+        }
+      });
+
+      // ── 5. Country filter respected ───────────────────────────────────────────
+      pm.test("Result country code matches filter (if present)", () => {
+        const inParam = pm.request.url.query.get('in') || '';
+        const match   = inParam.match(/countryCode:([A-Z]{3})/);
+        if (match && best.address?.countryCode) {
+          pm.expect(best.address.countryCode.toUpperCase()).to.equal(match[1],
+            `Country filter '${match[1]}' not respected — got '${best.address.countryCode}'`
+          );
+        }
+      });
+
+      // ── 6. Console summary ────────────────────────────────────────────────────
+      console.log("=== HERE Geocoding Results ===");
+      console.log(`Query:        ${pm.variables.get('village')}`);
+      console.log(`Results:      ${items.length}`);
+      console.log(`Best match:   ${best.title}`);
+      console.log(`Coordinates:  ${best.position?.lat}, ${best.position?.lng}`);
+      console.log(`Result type:  ${best.resultType}`);
+      console.log(`Query score:  ${queryScore ?? 'N/A'}`);
+      console.log(`Country:      ${best.address?.countryName} (${best.address?.countryCode})`);
+      console.log("");
+
+      // Confidence assessment for African village-only queries
+      if (queryScore !== null) {
+        if (queryScore >= 0.85) {
+          console.log("✅ HIGH confidence — auto-accept threshold met (>= 0.85)");
+        } else if (queryScore >= 0.70) {
+          console.log("⚠️  MEDIUM confidence — above auto-accept floor (>= 0.70) but below high threshold");
+        } else if (queryScore >= 0.55) {
+          console.log("🔶 LOW confidence — result returned but field verification recommended");
+        } else {
+          console.log("❌ VERY LOW confidence — do not use without manual review");
+        }
+      }
+
+      // Show all results for comparison
+      console.log("\n--- All results ---");
+      items.forEach((item, i) => {
+        console.log(`[${i + 1}] ${item.title} | type: ${item.resultType} | score: ${item.scoring?.queryScore ?? 'N/A'} | ${item.position?.lat}, ${item.position?.lng}`);
+      });

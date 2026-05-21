@@ -113,6 +113,24 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
+// Export rate limiter — more generous window for file-generation endpoints
+// These requests are heavier and less frequent than regular API calls.
+const exportLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: parseInt(process.env.EXPORT_RATE_LIMIT_MAX) || 30, // 30 export requests per window
+  message: {
+    error: {
+      en: 'Too many export requests, please wait a moment and try again.',
+      fr: 'Trop de demandes d\'export, veuillez patienter et réessayer.'
+    }
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.method === 'GET' // only throttle POST (actual file generation)
+});
+// Mount BEFORE the global limiter so export routes get their own, higher quota
+app.use('/api/export', exportLimiter);
+
 // Batch Processing rate limiter / Limitation de débit pour le traitement par lots
 const batchLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -253,6 +271,16 @@ app.get('/api/sources/status', (req, res) => {
         reliability: 0.90,
         operational: true,
         reason: null
+      },
+      {
+        id: 'here',
+        name: 'HERE Geocoding & Search',
+        reliability: 0.87,
+        operational: !!process.env.HERE_API_KEY,
+        reason: process.env.HERE_API_KEY ? null : {
+          en: 'API key not configured (HERE_API_KEY)',
+          fr: 'Clé API non configurée (HERE_API_KEY)'
+        }
       },
       {
         id: 'braveSearch',
